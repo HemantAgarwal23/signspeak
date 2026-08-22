@@ -32,7 +32,8 @@ Virtualenv at `python/.venv`. Not a git repo yet.
 | M21 | confusion warning | **DONE** - warns at record time |
 | M22 | speech output | **DONE** - pyttsx3 on a worker thread |
 | M25 | export/import gesture sets | **DONE** - validated JSON |
-| M14–M18, M23–M24, M26 | web build, accounts, mobile | not started |
+| M13–M18 | browser build | **DONE** - parity verified, working in browser |
+| M23–M24, M26 | accounts, browser calibration, mobile | not started (M24 waits on M10) |
 | M27 | user testing | not started |
 
 ---
@@ -277,6 +278,43 @@ and `representation_ablation.png`.
 - Imports `split_indices` from sample_efficiency rather than copying it - the
   temporal split must be identical or the two experiments describe different
   models.
+
+## Browser build (2026-08-23) - M13 to M18 DONE
+
+- `web/`: Vite + vanilla JS. `config.js`, `features.js`, `buffer.js`,
+  `merger.js`, `landmarks.js`, `classifier-svm.js`, `classifier-knn.js`,
+  `main.js`, `styles.css`, `index.html`.
+- **M13 ONNX export** (`python/export/export_to_onnx.py`): scaler folded INTO
+  the graph so standardisation exists in one place only. 200/200 predictions
+  identical to sklearn, probability drift 1.9e-6, 1.1 MB.
+- **PARITY VERIFIED** (`web/tests/test-parity.mjs`): feature transform matches
+  Python to 1.19e-7 over 7560 values; ONNX matches sklearn 60/60. Run before
+  any UI was written.
+- 27 core JS tests mirror the Python merger/buffer suites case for case.
+- User confirmed the page loads and works in the browser.
+
+### Browser gotchas already hit and fixed
+1. `wasmPaths` unset -> ORT fetched .wasm from site root -> Vite SPA fallback
+   returned index.html -> "expected magic word 00 61 73 6d, found 3c 21 64 6f"
+   (= "<!do").
+2. `wasmPaths = "ort/"` -> "Failed to resolve module specifier": ORT uses a
+   dynamic import(), so it needs an ABSOLUTE url. Now
+   `new URL("ort/", document.baseURI).href`, which also survives subpath hosting.
+3. `numThreads = 1` deliberately - threaded wasm needs SharedArrayBuffer, which
+   needs COOP/COEP headers, which would rule out plain static hosting.
+4. Default onnxruntime entry pulls a 26 MB WebGPU build; `onnxruntime-web/wasm`
+   is 13 MB (3.5 MB gzipped).
+5. `web/public/{ort,wasm}/` are gitignored and restored by
+   `scripts/copy-assets.mjs` on postinstall - a fresh clone breaks without it.
+
+## Open questions for next session
+- **Has the user checked real letters in the browser vs desktop?** Not yet as of
+  2026-08-23. Parity tests pass on synthetic vectors only.
+- **Playwright installed** (~150 MB devDependency) plus `web/tests/test-boot.mjs`
+  (real browser + fake camera, checks console errors and canvas painting).
+  Written after two wrong guesses at the wasm path. User has NOT decided whether
+  to keep it - ask.
+- README rewritten around measured results with 3 embedded figures.
 
 ## Verified so far
 
