@@ -24,7 +24,8 @@ Virtualenv at `python/.venv`. Not a git repo yet.
 | M5 | live predictor | **DONE** - predictor.py + live.py, verified 8/8 on known samples |
 | M6 | letter merger | **DONE** - 13/13 tests pass in tests/test_merger.py |
 | M7 | desktop app | **DONE** - ui.py dashboard + help overlay |
-| M8–M12 | experiments | not started |
+| M8 | sample efficiency | **DONE** - headline result, figures in docs/results/ |
+| M9–M12 | cross-subject, calibration, ablation, confusion | not started (M9/M10 need user's own recordings) |
 | M13 | ONNX export | not started |
 | M19–M20 | custom gestures + phrases | **DONE early** - user asked for these before the experiments |
 | M21 | confusion warning | **DONE** - warns at record time |
@@ -239,6 +240,24 @@ tested against recorded sequences, not synthetic vectors.**
   ui.py now.
 - Verified headlessly across empty/degenerate states (no gestures, no hand,
   400-char sentence, help open) - renders without raising.
+
+## M8 sample efficiency (2026-08-23) - HEADLINE RESULT
+
+`experiments/sample_efficiency.py`. Outputs: `docs/results/sample_efficiency.{csv,json,png}`
+and `representation_ablation.png`.
+
+- Temporal split, 5 seeds: N=5 -> 85.2%, N=10 -> 91.1%, N=20 -> 93.4%,
+  N=60 -> 95.0%, N=300 -> 96.7%. Training 0.003s at N=5, 0.161s at N=300.
+- **Added a temporal split beyond the spec.** Spec asks for a random split; on
+  single-session data that leaks (neighbouring frames near-identical). Temporal
+  splits by position = capture order. Random reads 3-4 points higher at every N.
+  The gap quantifies the leakage and explains the earlier 99.79%.
+- **Representation ablation vindicates the earlier decision**: at N=5, absolute
+  40.1% vs wrist-relative 66.2% vs wrist+scale 85.2%. Absolute at N=300 (86.1%)
+  still loses to wrist+scale at N=10 (91.1%).
+- **Timing uses MIN across seeds**, not mean/median. Both produced curves where
+  training got cheaper with more data - CPU contention only adds time, so the
+  fastest repeat is the cleanest estimate. Two plots were regenerated for this.
 
 ## Verified so far
 

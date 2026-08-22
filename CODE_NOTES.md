@@ -484,6 +484,53 @@ own recordings, which the model has never seen — that is the next step.
 
 ---
 
+## 5a. M8 results — the headline numbers
+
+`python -m experiments.sample_efficiency --representations`, outputs in
+`docs/results/`.
+
+**Sample efficiency (temporal split, 24 letters, 5 seeds):**
+
+| samples/class | accuracy | training time |
+|---|---|---|
+| 5 | 85.2% ± 2.2 | 0.003s |
+| 10 | 91.1% ± 0.9 | 0.004s |
+| 20 | 93.4% ± 0.4 | 0.007s |
+| 60 | 95.0% ± 0.8 | 0.023s |
+| 300 | 96.7% ± 0.2 | 0.161s |
+
+Five examples per letter gets you 85%. Sixty gets 95%. Six times the data buys
+ten points, and the curve is flat past ~60 — that is the few-shot claim, and it
+is now measured rather than asserted.
+
+**Two splits, and the gap is a result.** `random` is what the spec asks for;
+on this data it leaks, because the samples come from one continuous session and
+neighbouring frames are near-identical, so a shuffled split puts near-duplicates
+on both sides. `temporal` splits by position — samples were imported in
+filename order, which is capture order — so train and test stay genuinely apart
+in time. Random reads 3–4 points higher at every N. Reporting both is what makes
+the earlier 99.79% explainable rather than embarrassing.
+
+**Representation ablation — this vindicates the change made before recording:**
+
+| representation | N=5 | N=300 |
+|---|---|---|
+| absolute (the spec's original) | **40.1%** | 86.1% |
+| wrist-relative | 66.2% | 93.7% |
+| wrist + scale (current) | **85.2%** | 96.7% |
+
+At five samples per class the current representation more than doubles the
+spec's. The gap narrows with data but never closes — absolute at 300 samples
+still loses to wrist+scale at 10.
+
+**One measurement note worth defending.** Training time is reported as the
+**minimum** across seeds, not the mean or median. Both of those produced curves
+where training got *cheaper* as data grew, which is impossible: background CPU
+contention only ever adds time, so the fastest repeat is the least contaminated
+estimate. The first two plots were unusable because of this.
+
+---
+
 ## 5b. Two bugs that real use found and synthetic tests did not
 
 Both were in custom gestures, both surfaced by actually waving hands at the
