@@ -278,10 +278,28 @@ Text to speech that never stalls the video. `pyttsx3.runAndWait()` blocks until
 the phrase finishes, so speaking happens on a worker thread fed by a queue and
 `say()` returns in ~0.02 ms.
 
-The engine is created **inside** that thread, not passed into it. On Windows the
-SAPI5 driver is COM-based and its objects are not safe to share across threads;
-an engine built on the main thread and driven from a worker fails in ways that
-look like random hangs.
+Two non-obvious details, both found the hard way:
+
+**The engine is created inside that thread**, not passed into it. On Windows the
+SAPI5 driver is COM-based and its objects are not safe to share across threads.
+
+**The engine is rebuilt for every utterance.** A reused one speaks exactly once;
+every later `runAndWait()` returns immediately and silently produces nothing.
+Measured against a phrase that takes ~5.5s to speak:
+
+| pass | reused engine | fresh engine |
+|---|---|---|
+| 1 | 5.49s | 5.78s |
+| 2 | 0.50s (silent) | 4.97s |
+| 3 | 0.38s (silent) | 4.94s |
+
+Rebuilding costs ~0.07s. `gc.collect()` after disposal matters — pyttsx3 hands
+back a cached engine while one is still referenced, so without it the next call
+inherits the spent one.
+
+This is why `tests/test_speech.py` asserts on **elapsed time** rather than on a
+return value: the failure is silent and successful-looking, so the only evidence
+that speech happened is that it took as long as speech takes.
 
 If `pyttsx3` is missing the Speaker degrades to silence rather than raising —
 speech is a nicety, not a dependency.

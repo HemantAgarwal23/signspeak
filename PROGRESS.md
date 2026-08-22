@@ -210,9 +210,14 @@ tested against recorded sequences, not synthetic vectors.**
 ## Polish pass (2026-08-23)
 
 - `speech.py`: pyttsx3 on a daemon worker thread; `say()` returns in ~0.02 ms so
-  the capture loop never blocks. **Engine is built inside the worker thread** -
-  SAPI5 is COM-based and cross-thread engine use hangs. Degrades to silence if
-  pyttsx3 is absent. Keys in live.py: `s` speak, `a` toggle auto-speak
+  the capture loop never blocks. **Engine is built inside the worker thread**
+  (SAPI5 is COM-based, not thread-safe) **and rebuilt per utterance**.
+  BUG FOUND BY USE: a reused engine speaks once, then every later runAndWait()
+  returns instantly and silently. Measured on a ~5.5s phrase: 5.49s, then 0.50s,
+  then 0.38s. Fix is a fresh engine per utterance plus gc.collect() (pyttsx3
+  returns a cached engine while one is still referenced). Costs ~0.07s.
+  tests/test_speech.py asserts on ELAPSED TIME because the failure is silent and
+  looks successful. Degrades to silence if pyttsx3 is absent. Keys in live.py: `s` speak, `a` toggle auto-speak
   (custom mode only - per-letter speech is noise).
 - Export/import (M25): `--export FILE`, `--import FILE`, `--prefix`, `--force`.
   Imports validated (feature_dim, shape, numeric, non-empty); collisions

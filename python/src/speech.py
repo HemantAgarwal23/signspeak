@@ -4,10 +4,14 @@ pyttsx3's `runAndWait()` blocks until the phrase finishes. Called from the
 capture loop that would freeze the video for the length of every utterance, so
 speaking happens on a worker thread fed by a queue and the loop never waits.
 
-The engine is also created *inside* that thread. On Windows the SAPI5 driver is
-COM-based and objects are not safely shared across threads, so an engine built
-on the main thread and driven from a worker misbehaves in ways that look like
-random hangs.
+The engine is created *inside* that thread, and rebuilt for every utterance.
+Both matter:
+
+* On Windows the SAPI5 driver is COM-based and its objects are not safe to
+  share across threads.
+* A reused engine speaks exactly once. Later `runAndWait()` calls return
+  immediately and silently produce nothing - measured at 5.49s for the first
+  pass of a phrase and 0.4s for each one after. Rebuilding costs ~0.07s.
 
     speaker = Speaker()
     speaker.say("I need help")     # returns immediately
@@ -43,45 +47,62 @@ class Speaker:
             return
 
         self.available = True
+        self._voices = []
         self._thread = threading.Thread(target=self._run, daemon=True)
         self._thread.start()
 
     def _run(self) -> None:
-        import pyttsx3
-
-        try:
-            engine = pyttsx3.init()
-        except Exception:
-            self.available = False
-            return
-
-        if self.rate is not None:
-            engine.setProperty("rate", self.rate)
-
-        voices = engine.getProperty("voices") or []
-        self._voices = [v.name for v in voices]
-        if self.voice:
-            wanted = self.voice.lower()
-            for v in voices:
-                if wanted in v.name.lower():
-                    engine.setProperty("voice", v.id)
-                    break
-
         while True:
             item = self._queue.get()
             if item is _STOP:
                 break
             try:
-                engine.say(item)
-                engine.runAndWait()
+                self._speak_once(item)
             except Exception:
                 # A failed utterance must never take down the capture loop.
                 pass
 
+    def _speak_once(self, text: str) -> None:
+        """Build an engine, say one thing, dispose of it.
+
+        A single reused engine speaks exactly once. Every later runAndWait()
+        returns immediately without producing sound: measured against a phrase
+        that takes 5.5s to speak, the first pass took 5.49s and every
+        subsequent one 0.4-0.5s. It fails silently, which is why the symptom
+        was "it spoke the first phrase and then went quiet".
+
+        Rebuilding per utterance costs about 0.07s and always speaks.
+        """
+        import gc
+
+        import pyttsx3
+
+        engine = pyttsx3.init()
         try:
-            engine.stop()
-        except Exception:
-            pass
+            if self.rate is not None:
+                engine.setProperty("rate", self.rate)
+
+            voices = engine.getProperty("voices") or []
+            if not self._voices:
+                self._voices = [v.name for v in voices]
+            if self.voice:
+                wanted = self.voice.lower()
+                for v in voices:
+                    if wanted in v.name.lower():
+                        engine.setProperty("voice", v.id)
+                        break
+
+            engine.say(text)
+            engine.runAndWait()
+        finally:
+            try:
+                engine.stop()
+            except Exception:
+                pass
+            del engine
+            # pyttsx3 hands back a cached engine while one is still referenced,
+            # so the next call would inherit the spent one.
+            gc.collect()
 
     def say(self, text: str) -> bool:
         """Queue text to be spoken. Returns immediately."""
