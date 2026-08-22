@@ -29,3 +29,8 @@ web/dist/
 .DS_Store
 Thumbs.db
 .vscode/
+
+# Web build output and parity fixture (regenerated from the dataset)
+web/dist/
+web/public/wasm/
+web/tests/parity-fixture.json

@@ -1,0 +1,49 @@
+{
+  "trained_at": "2026-08-23T00:54:16",
+  "n_train": 11520,
+  "n_test": 2880,
+  "split": "stratified random split, 20% test",
+  "train_accuracy": 0.9983506944444445,
+  "test_accuracy": 0.9979166666666667,
+  "train_seconds": 21.98897729998862,
+  "probability": true,
+  "feature_wrist_relative": true,
+  "feature_scale_normalise": true,
+  "svm": {
+    "kernel": "rbf",
+    "C": 10,
+    "gamma": "scale"
+  },
+  "labels": [
+    "A",
+    "B",
+    "C",
+    "D",
+    "E",
+    "F",
+    "G",
+    "H",
+    "I",
+    "K",
+    "L",
+    "M",
+    "N",
+    "O",
+    "P",
+    "Q",
+    "R",
+    "S",
+    "T",
+    "U",
+    "V",
+    "W",
+    "X",
+    "Y"
+  ],
+  "subjects": [
+    "public"
+  ],
+  "feature_dim": 126,
+  "scaler_folded_into_graph": true,
+  "exported_at": "2026-08-23T03:40:39"
+}

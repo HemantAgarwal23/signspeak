@@ -1,0 +1,111 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+    <title>signspeak</title>
+    <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>&#128075;</text></svg>" />
+    <link rel="stylesheet" href="./src/styles.css" />
+  </head>
+  <body>
+    <main class="app">
+      <section class="stage">
+        <video id="video" playsinline muted hidden></video>
+        <canvas id="canvas" width="640" height="480"></canvas>
+
+        <div id="overlay" class="overlay">
+          <div class="overlay-card">
+            <h1>signspeak</h1>
+            <p>ASL fingerspelling and your own custom gestures, recognised in
+              the browser. Nothing is uploaded &mdash; the video never leaves
+              this device.</p>
+            <button id="start" class="primary">Enable camera</button>
+            <p id="overlay-note" class="muted"></p>
+          </div>
+        </div>
+
+        <div class="stage-foot">
+          <span id="fps" class="pill">--- fps</span>
+          <span id="hands" class="pill">no hand</span>
+        </div>
+      </section>
+
+      <aside class="panel">
+        <header class="panel-head">
+          <div class="modes">
+            <button id="mode-asl" class="mode active">ASL letters</button>
+            <button id="mode-custom" class="mode">Custom</button>
+          </div>
+        </header>
+
+        <div class="reading">
+          <div id="prediction" class="prediction">&mdash;</div>
+          <div class="meter"><div id="confidence-bar" class="meter-fill"></div></div>
+          <div id="confidence-text" class="muted small">waiting for a hand</div>
+          <ul id="candidates" class="candidates"></ul>
+        </div>
+
+        <div class="hold">
+          <div class="row">
+            <span id="hold-label" class="small muted">nothing held</span>
+            <span id="hold-frames" class="small muted"></span>
+          </div>
+          <div class="meter tall"><div id="hold-bar" class="meter-fill amber"></div></div>
+        </div>
+
+        <div class="output">
+          <div class="row">
+            <span class="label">Output</span>
+            <div class="row-actions">
+              <button id="speak" class="ghost" title="Speak the sentence">Speak</button>
+              <button id="undo" class="ghost" title="Remove the last item">Undo</button>
+              <button id="space" class="ghost" title="Insert a space">Space</button>
+              <button id="clear" class="ghost" title="Clear everything">Clear</button>
+            </div>
+          </div>
+          <div id="sentence" class="sentence" aria-live="polite"></div>
+          <label class="toggle">
+            <input type="checkbox" id="auto-speak" />
+            <span>Speak each phrase automatically (custom mode)</span>
+          </label>
+        </div>
+
+        <div id="custom-panel" class="custom hidden">
+          <div class="row">
+            <span class="label">Your gestures</span>
+            <button id="record" class="primary small-btn">Record new</button>
+          </div>
+          <ul id="gesture-list" class="gesture-list"></ul>
+          <div class="row-actions">
+            <button id="export" class="ghost">Export</button>
+            <button id="import" class="ghost">Import</button>
+            <input type="file" id="import-file" accept="application/json" hidden />
+          </div>
+        </div>
+
+        <footer class="panel-foot muted small">
+          <span id="status">loading&hellip;</span>
+        </footer>
+      </aside>
+    </main>
+
+    <div id="recorder" class="recorder hidden">
+      <div class="recorder-card">
+        <h2>Record a gesture</h2>
+        <label>Name<input id="gesture-name" placeholder="thumbs_up" /></label>
+        <label>Phrase it should say<input id="gesture-phrase" placeholder="OK!" /></label>
+        <p id="recorder-status" class="muted small">
+          Hold the shape once recording starts, and move it slightly &mdash;
+          20 identical frames teach it the gesture only exists at one angle.
+        </p>
+        <div class="meter"><div id="record-bar" class="meter-fill"></div></div>
+        <div class="row-actions">
+          <button id="record-start" class="primary">Start</button>
+          <button id="record-cancel" class="ghost">Cancel</button>
+        </div>
+      </div>
+    </div>
+
+    <script type="module" src="./src/main.js"></script>
+  </body>
+</html>
