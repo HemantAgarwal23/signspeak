@@ -38,8 +38,14 @@ SCHEMA_VERSION = 1
 # A query further than this from every stored sample is called "no match"
 # rather than forced into the nearest class. Without a reject rule a KNN always
 # answers, so an idle hand would keep firing whichever gesture happened to be
-# closest. Calibrated as a multiple of how spread out a gesture's own samples
-# are - see KNNClassifier._reject_threshold.
+# closest.
+#
+# The threshold is per-gesture, not global, because gestures are not equally
+# spread. A two-handed gesture fills twice as many non-zero dimensions as a
+# one-handed one and so spreads wider in Euclidean distance; averaging the two
+# into one number would loosen the one-handed gestures (easier to false-trigger)
+# and tighten the two-handed ones (harder to recognise) at the same time.
+# See KNNClassifier._compute_thresholds.
 REJECT_SPREAD_MULTIPLE = 2.5
 REJECT_FLOOR = 0.35
 
@@ -171,7 +177,8 @@ class KNNClassifier:
         self.k = k
         self.labels: np.ndarray
         self.X: np.ndarray
-        self.reject_threshold: float = REJECT_FLOOR
+        self.thresholds: Dict[str, float] = {}
+        self.hands: Dict[str, int] = {}
         self.fit(store)
 
     def fit(self, store: GestureStore) -> float:
@@ -183,28 +190,50 @@ class KNNClassifier:
         start = time.perf_counter()
         raw, self.labels = store.matrix()
         self.X = features.transform(raw) if len(raw) else raw
-        self.reject_threshold = self._reject_threshold()
+        self.thresholds = self._compute_thresholds()
+        self.hands = self._count_hands()
         return time.perf_counter() - start
 
-    def _reject_threshold(self) -> float:
-        """How far is too far, derived from how tight the gestures are.
+    def _compute_thresholds(self) -> Dict[str, float]:
+        """Per-gesture "how far is too far", derived from its own tightness.
 
-        A gesture's own samples vary by some amount; anything several times
-        further away than that is not the gesture. Calibrating from the data
-        beats a hard-coded distance, which would depend on the feature scale.
+        A gesture's samples vary by some amount; anything several times further
+        than that is not the gesture. Calibrating per gesture from its own data
+        beats both a hard-coded distance (which depends on feature scale) and a
+        shared average (which mixes one- and two-handed spreads together).
         """
-        if len(self.X) < 2:
-            return REJECT_FLOOR
-        spreads = []
+        thresholds: Dict[str, float] = {}
         for name in np.unique(self.labels):
             block = self.X[self.labels == name]
             if len(block) < 2:
+                thresholds[str(name)] = REJECT_FLOOR
                 continue
             centroid = block.mean(axis=0)
-            spreads.append(np.linalg.norm(block - centroid, axis=1).mean())
-        if not spreads:
+            spread = float(np.linalg.norm(block - centroid, axis=1).mean())
+            thresholds[str(name)] = max(REJECT_FLOOR,
+                                        spread * REJECT_SPREAD_MULTIPLE)
+        return thresholds
+
+    def _count_hands(self) -> Dict[str, int]:
+        """How many hands each gesture uses. Reported, not enforced."""
+        counts: Dict[str, int] = {}
+        for name in np.unique(self.labels):
+            block = self.X[self.labels == name]
+            left = np.abs(block[:, :FEATURE_DIM // 2]).sum(axis=1) > 0
+            right = np.abs(block[:, FEATURE_DIM // 2:]).sum(axis=1) > 0
+            counts[str(name)] = int(round(float((left.astype(int)
+                                                 + right.astype(int)).mean())))
+        return counts
+
+    def threshold_for(self, name: str) -> float:
+        return self.thresholds.get(name, REJECT_FLOOR)
+
+    @property
+    def reject_threshold(self) -> float:
+        """Mean across gestures. For display only - predict() is per-gesture."""
+        if not self.thresholds:
             return REJECT_FLOOR
-        return max(REJECT_FLOOR, float(np.mean(spreads)) * REJECT_SPREAD_MULTIPLE)
+        return float(np.mean(list(self.thresholds.values())))
 
     @property
     def ready(self) -> bool:
@@ -220,7 +249,12 @@ class KNNClassifier:
         distances = np.linalg.norm(self.X - query, axis=1)
         order = np.argsort(distances)[:min(self.k, len(distances))]
 
-        if distances[order[0]] > self.reject_threshold:
+        # Judged against the nearest gesture's own threshold, so a wide-spread
+        # two-handed gesture is not held to a tight one-handed gesture's
+        # standard, or vice versa.
+        nearest_label = str(self.labels[order[0]])
+        threshold = self.threshold_for(nearest_label)
+        if distances[order[0]] > threshold:
             return None, 0.0
 
         # Vote among the k nearest, weighted by inverse distance, then express
@@ -236,7 +270,10 @@ class KNNClassifier:
 
         # Temper the vote share by how close the nearest neighbour actually is,
         # so a lone distant-but-unanimous match cannot report high confidence.
-        closeness = 1.0 - min(1.0, distances[order[0]] / self.reject_threshold)
+        # Measured against the winner's own threshold, keeping confidences
+        # comparable between one- and two-handed gestures.
+        closeness = 1.0 - min(1.0, distances[order[0]] /
+                              self.threshold_for(label))
         return label, float(share * (0.5 + 0.5 * closeness))
 
     def nearest_gesture(self, samples: np.ndarray, exclude: str = ""
@@ -264,9 +301,12 @@ class KNNClassifier:
     def describe(self) -> str:
         if not self.ready:
             return "KNN: no gestures stored"
-        return (f"KNN: {len(np.unique(self.labels))} gestures, "
-                f"{len(self.X)} samples, k={self.k}, "
-                f"reject beyond {self.reject_threshold:.3f}")
+        detail = ", ".join(
+            f"{name} ({self.hands.get(name, 1)}h, <{self.thresholds[name]:.2f})"
+            for name in sorted(self.thresholds)
+        )
+        return (f"KNN: {len(self.thresholds)} gestures, {len(self.X)} samples, "
+                f"k={self.k}\n  {detail}")
 
 
 DEFAULT_PHRASES: List[Tuple[str, str]] = [

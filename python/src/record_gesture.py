@@ -192,7 +192,10 @@ def main() -> None:
     if len(store):
         classifier = KNNClassifier(store)
         nearest, distance = classifier.nearest_gesture(samples, exclude=name)
-        limit = classifier.reject_threshold * CONFUSION_FRACTION
+        # Compared against that gesture's own threshold, not a shared average:
+        # a wide two-handed gesture tolerates more distance before two shapes
+        # genuinely risk being confused.
+        limit = classifier.threshold_for(nearest or "") * CONFUSION_FRACTION
         if nearest and distance < limit:
             print(f"\nWARNING: this looks a lot like {nearest!r} "
                   f"(distance {distance:.3f}, warning below {limit:.3f}).")

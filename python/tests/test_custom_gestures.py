@@ -22,13 +22,19 @@ def check(name, got, want):
         fails.append(name)
 
 
-def fake_hand(seed, jitter=0.01, n=20):
-    """A plausible right-hand gesture: 21 landmarks, slot 1, small jitter."""
-    base = RNG.random((21, 3)).astype(np.float32)
+def fake_hand(seed, jitter=0.01, n=20, two_handed=False):
+    """A plausible gesture: 21 landmarks per hand, small jitter between samples.
+
+    two_handed fills both slots, which is what a real two-handed gesture looks
+    like and what the per-gesture reject threshold exists to handle.
+    """
+    right = RNG.random((21, 3)).astype(np.float32)
+    left = RNG.random((21, 3)).astype(np.float32)
     out = np.zeros((n, 126), np.float32)
     for i in range(n):
-        block = base + RNG.normal(0, jitter, base.shape).astype(np.float32)
-        out[i, 63:] = block.reshape(-1)
+        out[i, 63:] = (right + RNG.normal(0, jitter, right.shape)).reshape(-1)
+        if two_handed:
+            out[i, :63] = (left + RNG.normal(0, jitter, left.shape)).reshape(-1)
     return out
 
 
@@ -75,6 +81,34 @@ near, d_near = knn.nearest_gesture(dupe.astype(np.float32))
 far_g, d_far = knn.nearest_gesture(fake_hand(42))
 check("near-duplicate identifies the gesture it clones", near, "thumbs_up")
 check("near-duplicate is closer than a distinct gesture", d_near < d_far, True)
+
+# --- mixed one- and two-handed gestures -----------------------------------
+mixed = GestureStore(path=Path(tempfile.mkdtemp()) / "mixed.json")
+mixed.add("one_hand_tight", fake_hand(11, jitter=0.005), phrase="one")
+mixed.add("two_hand_wide", fake_hand(12, jitter=0.02, two_handed=True), phrase="two")
+mixed_knn = KNNClassifier(mixed)
+
+check("hand count detected per gesture",
+      (mixed_knn.hands["one_hand_tight"], mixed_knn.hands["two_hand_wide"]),
+      (1, 2))
+check("two-handed gesture gets a wider threshold than the tight one-handed one",
+      mixed_knn.threshold_for("two_hand_wide")
+      > mixed_knn.threshold_for("one_hand_tight"), True)
+check("thresholds are per gesture, not one shared number",
+      len(set(mixed_knn.thresholds.values())) > 1, True)
+
+both = 0
+for name in ("one_hand_tight", "two_hand_wide"):
+    for i in (0, 7, -1):
+        label, conf = mixed_knn.predict(mixed.gestures[name].samples[i])
+        both += label == name
+check("both gestures recognised when mixed", both, 6)
+
+# a one-handed query must not be swallowed by the wide two-handed threshold
+stray = np.zeros(126, np.float32)
+stray[63:] = (RNG.random((21, 3)) * 6 + 12).reshape(-1)
+check("stray pose still rejected in a mixed store",
+      mixed_knn.predict(stray), (None, 0.0))
 
 # training is genuinely fast - the few-shot claim
 seconds = knn.fit(store)
