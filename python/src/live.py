@@ -67,6 +67,9 @@ def parse_args() -> argparse.Namespace:
                         help="how many candidate letters to display")
     parser.add_argument("--mode", choices=[ASL, CUSTOM], default=ASL,
                         help="which classifier to start in")
+    parser.add_argument("--debug", action="store_true",
+                        help="in custom mode, show the nearest gesture and its "
+                             "distance even when it is rejected")
     return parser.parse_args()
 
 
@@ -196,6 +199,14 @@ def main() -> None:
                               f"{state['frames']} frames  "
                               f"{state['progress']:.0%}",
                               GREEN if state["committed"] else AMBER))
+
+            if args.debug and mode == CUSTOM and aggregated is not None:
+                near, distance, threshold = knn.nearest_info(aggregated)
+                if near is not None:
+                    lines.append((f"nearest {near} d={distance:.3f} "
+                                  f"limit={threshold:.3f}"
+                                  f" {'OK' if distance <= threshold else 'REJECTED'}",
+                                  GREEN if distance <= threshold else RED))
 
             draw_panel(frame, lines)
             draw_progress(frame, state["progress"],

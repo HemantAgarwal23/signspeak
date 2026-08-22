@@ -91,11 +91,33 @@ mixed_knn = KNNClassifier(mixed)
 check("hand count detected per gesture",
       (mixed_knn.hands["one_hand_tight"], mixed_knn.hands["two_hand_wide"]),
       (1, 2))
-check("two-handed gesture gets a wider threshold than the tight one-handed one",
-      mixed_knn.threshold_for("two_hand_wide")
-      > mixed_knn.threshold_for("one_hand_tight"), True)
-check("thresholds are per gesture, not one shared number",
-      len(set(mixed_knn.thresholds.values())) > 1, True)
+# The threshold tracks the distance to the nearest OTHER gesture, not just a
+# gesture's own jitter - samples come from overlapping windows and understate
+# real variation badly. With exactly two gestures both sit the same distance
+# apart, so both thresholds are the margin-derived one.
+from custom_gestures import RELATIVE_MARGIN   # noqa: E402
+import features as _f                          # noqa: E402
+
+ca = _f.transform(mixed.gestures["one_hand_tight"].samples).mean(0)
+cb = _f.transform(mixed.gestures["two_hand_wide"].samples).mean(0)
+separation = float(np.linalg.norm(ca - cb))
+check("threshold scales with distance to the nearest other gesture",
+      abs(mixed_knn.threshold_for("one_hand_tight")
+          - separation * RELATIVE_MARGIN) < 1e-4, True)
+check("threshold is far looser than raw sample spread would give",
+      mixed_knn.threshold_for("two_hand_wide") > 0.35, True)
+
+# A third gesture placed near one of the others must tighten only that pair.
+crowded = GestureStore(path=Path(tempfile.mkdtemp()) / "crowded.json")
+crowded.add("alpha", fake_hand(21))
+crowded.add("beta", fake_hand(22, two_handed=True))
+near_alpha = crowded.gestures["alpha"].samples + RNG.normal(0, 0.05, (20, 126))
+crowded.add("alpha_ish", near_alpha.astype(np.float32))
+crowded_knn = KNNClassifier(crowded)
+check("thresholds differ once neighbours differ",
+      len(set(round(v, 4) for v in crowded_knn.thresholds.values())) > 1, True)
+check("the crowded pair gets the tighter threshold",
+      crowded_knn.threshold_for("alpha") < crowded_knn.threshold_for("beta"), True)
 
 both = 0
 for name in ("one_hand_tight", "two_hand_wide"):

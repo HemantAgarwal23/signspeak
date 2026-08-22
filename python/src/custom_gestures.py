@@ -49,6 +49,22 @@ SCHEMA_VERSION = 1
 REJECT_SPREAD_MULTIPLE = 2.5
 REJECT_FLOOR = 0.35
 
+# Sample spread alone sets the threshold far too tight, and measurably so. The
+# 20 samples of a gesture are medians of overlapping windows, so consecutive
+# ones differ by ~0.014 while genuinely different gestures sit 2.8-4.2 apart.
+# A threshold built only from that spread lands near 0.35 and rejects
+# everything in the enormous gap between, even poses that are unambiguously
+# closer to one gesture than to any other.
+#
+# So the threshold is also scaled against how far away the *nearest other*
+# gesture is: accept within roughly a third of the way there, reject beyond.
+# That tracks the real decision boundary rather than a frozen moment's jitter.
+RELATIVE_MARGIN = 0.35
+
+# With a single gesture stored there is no neighbour to measure against, so
+# accept generously - there is nothing to confuse it with anyway.
+LONE_GESTURE_THRESHOLD = 1.0
+
 
 @dataclass
 class Gesture:
@@ -195,23 +211,36 @@ class KNNClassifier:
         return time.perf_counter() - start
 
     def _compute_thresholds(self) -> Dict[str, float]:
-        """Per-gesture "how far is too far", derived from its own tightness.
+        """Per-gesture "how far is too far".
 
-        A gesture's samples vary by some amount; anything several times further
-        than that is not the gesture. Calibrating per gesture from its own data
-        beats both a hard-coded distance (which depends on feature scale) and a
-        shared average (which mixes one- and two-handed spreads together).
+        Two signals, and the larger wins:
+
+        * how tightly the gesture's own samples cluster - but they come from
+          overlapping windows, so this understates real variation badly;
+        * how far away the nearest other gesture is - the actual boundary that
+          matters, and the one that scales correctly with hand count, since a
+          two-handed gesture is both wider *and* further from its neighbours.
         """
+        names = [str(n) for n in np.unique(self.labels)]
+        centroids = {name: self.X[self.labels == name].mean(axis=0)
+                     for name in names}
+
         thresholds: Dict[str, float] = {}
-        for name in np.unique(self.labels):
+        for name in names:
             block = self.X[self.labels == name]
-            if len(block) < 2:
-                thresholds[str(name)] = REJECT_FLOOR
-                continue
-            centroid = block.mean(axis=0)
-            spread = float(np.linalg.norm(block - centroid, axis=1).mean())
-            thresholds[str(name)] = max(REJECT_FLOOR,
-                                        spread * REJECT_SPREAD_MULTIPLE)
+
+            by_spread = REJECT_FLOOR
+            if len(block) >= 2:
+                spread = float(np.linalg.norm(block - centroids[name],
+                                              axis=1).mean())
+                by_spread = max(REJECT_FLOOR, spread * REJECT_SPREAD_MULTIPLE)
+
+            others = [np.linalg.norm(centroids[name] - centroids[other])
+                      for other in names if other != name]
+            by_margin = (float(min(others)) * RELATIVE_MARGIN if others
+                         else LONE_GESTURE_THRESHOLD)
+
+            thresholds[name] = max(by_spread, by_margin)
         return thresholds
 
     def _count_hands(self) -> Dict[str, int]:
@@ -275,6 +304,21 @@ class KNNClassifier:
         closeness = 1.0 - min(1.0, distances[order[0]] /
                               self.threshold_for(label))
         return label, float(share * (0.5 + 0.5 * closeness))
+
+    def nearest_info(self, raw_vector: np.ndarray) -> Tuple[Optional[str], float, float]:
+        """(nearest gesture, its distance, that gesture's threshold).
+
+        Reports what predict() decided and why, without the reject rule hiding
+        it - the difference between "nothing was close" and "something was
+        close but just over the line".
+        """
+        if not self.ready:
+            return None, float("inf"), 0.0
+        query = features.transform(np.asarray(raw_vector, dtype=np.float32))
+        distances = np.linalg.norm(self.X - query, axis=1)
+        i = int(np.argmin(distances))
+        name = str(self.labels[i])
+        return name, float(distances[i]), self.threshold_for(name)
 
     def nearest_gesture(self, samples: np.ndarray, exclude: str = ""
                         ) -> Tuple[Optional[str], float]:

@@ -5,13 +5,18 @@
     python -m src.record_gesture --delete thumbs_up
     python -m src.record_gesture --set-phrase thumbs_up --phrase "All good"
 
-Recording flow: 3-second countdown, then 20 samples captured continuously.
-Each sample is the median of a rolling 30-frame window, exactly matching how
-letter samples are aggregated - the KNN and the SVM must see the same kind of
-input.
+Recording flow: 3-second countdown, then 20 samples. Each sample is the median
+of a rolling 30-frame window, exactly matching how letter samples are
+aggregated - the KNN and the SVM must see the same kind of input.
 
-Move the gesture slightly during capture. Twenty identical frames teach the
-classifier that the gesture only exists at one precise angle.
+Samples are taken every --stride frames rather than every frame. Consecutive
+windows overlap by 29 of 30 frames, so sampling continuously produces 20
+near-identical copies of a single moment: measured at 0.014 apart, against
+2.8+ between genuinely different gestures. That fake tightness then poisons
+the reject threshold derived from it.
+
+Keep moving the gesture slightly throughout. The point of 20 samples is to
+capture how the gesture varies, not to record the same instant 20 times.
 """
 from __future__ import annotations
 
@@ -54,6 +59,10 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--phrase", default="",
                         help='what it should output, e.g. "I need help"')
     parser.add_argument("--samples", type=int, default=CUSTOM_GESTURE_SAMPLES)
+    parser.add_argument("--stride", type=int, default=6,
+                        help="frames to skip between samples. Consecutive "
+                             "windows overlap by 29 of 30 frames, so sampling "
+                             "every frame yields 20 near-identical copies")
     parser.add_argument("--countdown", type=float, default=3.0)
     parser.add_argument("--camera", type=int, default=0)
     parser.add_argument("--width", type=int, default=640)
@@ -89,6 +98,7 @@ def capture(name: str, args: argparse.Namespace) -> Optional[np.ndarray]:
     samples: List[np.ndarray] = []
     fps_meter = FPSMeter()
     phase = "countdown"
+    since_last = 0
     started: Optional[float] = None
     capture_started: Optional[float] = None
     elapsed = 0.0
@@ -126,10 +136,13 @@ def capture(name: str, args: argparse.Namespace) -> Optional[np.ndarray]:
 
             elif phase == "capture":
                 if buffer.ready and vector is not None:
-                    samples.append(buffer.value())
+                    since_last += 1
+                    if since_last >= args.stride or not samples:
+                        samples.append(buffer.value())
+                        since_last = 0
                 lines.append((f"RECORDING {len(samples)}/{args.samples}  "
                               f"[{buffer.hands}h]", GREEN))
-                lines.append(("move it slightly - vary the angle", GREY))
+                lines.append(("keep moving it slightly - vary the angle", GREY))
                 progress_bar(frame, len(samples) / args.samples)
                 if not buffer.ready:
                     # The window restarts whenever the hand count changes, so a
