@@ -531,6 +531,48 @@ estimate. The first two plots were unusable because of this.
 
 ---
 
+## 5a2. M12 confusion matrix
+
+`python -m experiments.confusion_matrix`. Temporal split, overall 96.8%.
+
+**Worst pairs** (rate = fraction of that letter's test samples):
+
+| shown | predicted as | rate |
+|---|---|---|
+| N | M | 12.2% |
+| U | X | 6.7% |
+| M | N | 6.1% |
+| X | S | 5.6% |
+| S | F | 4.4% |
+| R | U | 3.9% |
+
+**Weakest letters by recall:** N 80.0%, M 88.9%, S 89.4%, U 92.2%, R 94.4%.
+Everything else is above 94%, and eleven letters are at 99–100%.
+
+Three things worth saying about this in the report:
+
+**It confirms the live observation.** R and S misreading on camera was noticed
+before any of this was measured, and both sit in the five weakest letters. The
+confusion is a property of the model, not of one person's hands.
+
+**The failures are visually sensible.** M and N differ by a single finger over
+the thumb and account for the worst pair in both directions. R (crossed index
+and middle) against U (the same two fingers parallel) is the textbook ASL
+confusion. A model failing on exactly the pairs humans find ambiguous is
+evidence it learned handshape rather than artefacts.
+
+**M and N are hard twice over, independently.** They had the worst *detection*
+rates at import (40% and 42%, thumb tucked between fingers) and now the worst
+*classification* recall. Those are separate failures — one is MediaPipe not
+seeing a hand at all, the other is the SVM confusing two shapes it did see.
+
+Row-normalised so the diagonal reads as recall: of all the times this letter was
+shown, what fraction was recognised. Only cells at or above 0.02 are annotated —
+a fully annotated 24x24 grid is a wall of numbers, and the errors are the part
+worth reading.
+
+---
+
 ## 5b. Two bugs that real use found and synthetic tests did not
 
 Both were in custom gestures, both surfaced by actually waving hands at the

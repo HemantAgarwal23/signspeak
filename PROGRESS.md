@@ -25,7 +25,8 @@ Virtualenv at `python/.venv`. Not a git repo yet.
 | M6 | letter merger | **DONE** - 13/13 tests pass in tests/test_merger.py |
 | M7 | desktop app | **DONE** - ui.py dashboard + help overlay |
 | M8 | sample efficiency | **DONE** - headline result, figures in docs/results/ |
-| M9–M12 | cross-subject, calibration, ablation, confusion | not started (M9/M10 need user's own recordings) |
+| M12 | confusion matrix | **DONE** - 96.8% temporal, worst pair N->M 12.2% |
+| M9–M11 | cross-subject, calibration, merger ablation | not started (M9/M10 need user's A-Z; M11 needs ~10min of spelling) |
 | M13 | ONNX export | not started |
 | M19–M20 | custom gestures + phrases | **DONE early** - user asked for these before the experiments |
 | M21 | confusion warning | **DONE** - warns at record time |
@@ -258,6 +259,24 @@ and `representation_ablation.png`.
 - **Timing uses MIN across seeds**, not mean/median. Both produced curves where
   training got cheaper with more data - CPU contention only adds time, so the
   fastest repeat is the cleanest estimate. Two plots were regenerated for this.
+
+## M12 confusion matrix (2026-08-23)
+
+`experiments/confusion_matrix.py` -> `docs/results/confusion_matrix.{png,csv}`,
+`confused_pairs.csv`, `per_class_recall.csv`. Temporal split, overall 96.8%.
+
+- Worst pairs: N->M 12.2%, U->X 6.7%, M->N 6.1%, X->S 5.6%, S->F 4.4%,
+  R->U 3.9%.
+- Weakest recall: N 0.800, M 0.889, S 0.894, U 0.922, R 0.944. Eleven letters
+  at 0.99-1.00.
+- **Confirms the user's live observation**: they reported R and S misreading on
+  camera before this was measured; both are in the five weakest letters.
+- M and N are hard twice, independently: worst detection at import (40%/42%)
+  AND worst classification recall. Separate failures worth separating in the
+  report.
+- Imports `split_indices` from sample_efficiency rather than copying it - the
+  temporal split must be identical or the two experiments describe different
+  models.
 
 ## Verified so far
 
