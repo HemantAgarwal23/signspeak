@@ -5,11 +5,16 @@ __pycache__/
 venv/
 *.egg-info/
 
-# Recorded data and trained models are large and personal - keep them local.
-# Remove these three lines if you decide to version the dataset.
+# Recorded data, derived packs and trained models stay local: large, personal,
+# and all reproducible from the scripts. Remove these lines to version them.
 python/data/raw/
+python/data/packs/
 python/data/models/
+python/data/downloads/
 python/data/manifest.json
+
+# Scanned source plan (2.3MB of images, no extractable text)
+sign language plan.pdf
 
 # Downloadable model assets - re-fetch with `python -m src.download_models`
 web/public/models/*.task
