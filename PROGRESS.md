@@ -23,7 +23,7 @@ Virtualenv at `python/.venv`. Not a git repo yet.
 | M4 | aggregator + trainer | **DONE** - trained on public data, 99.79% val (meaningless, see below) |
 | M5 | live predictor | **DONE** - predictor.py + live.py, verified 8/8 on known samples |
 | M6 | letter merger | **DONE** - 13/13 tests pass in tests/test_merger.py |
-| M7 | desktop app | not started |
+| M7 | desktop app | **DONE** - ui.py dashboard + help overlay |
 | M8–M12 | experiments | not started |
 | M13 | ONNX export | not started |
 | M19–M20 | custom gestures + phrases | **DONE early** - user asked for these before the experiments |
@@ -224,6 +224,21 @@ tested against recorded sequences, not synthetic vectors.**
   reported not silently resolved. ~200 KB per 20 gestures.
 - requirements.txt gained pyttsx3.
 - All 3 test files pass; test_custom_gestures.py now ~35 checks.
+
+## UI pass (2026-08-23)
+
+- `ui.py`: `Dashboard` composites video (640) + panel (380) = 1020x480 canvas.
+  `ViewState` dataclass holds all panel data, rebuilt per frame, so rendering is
+  a pure function of state and can be exercised headlessly.
+- Panel shows: fps/hand count, mode badge, prediction with confidence bar,
+  top-k candidate bars, hold-to-confirm progress, wrapped output, footer hints.
+- Help overlay on `h` / `?`, spacing derived from window height so it cannot
+  clip. Output block clips with "... +n earlier" instead of colliding with the
+  footer.
+- live.py's old inline draw_panel/draw_progress removed; all drawing lives in
+  ui.py now.
+- Verified headlessly across empty/degenerate states (no gestures, no hand,
+  400-char sentence, help open) - renders without raising.
 
 ## Verified so far
 

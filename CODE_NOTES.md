@@ -211,6 +211,27 @@ frames, ~0.5s) clears the duplicate guard after a gap, so dropping your hand
 between the two Ls works, which is the natural gesture anyway. M11 should
 measure it.
 
+### `python/src/ui.py` — M7
+Dashboard rendering: the camera frame is composited onto a wider canvas with a
+solid panel beside it. Text drawn straight onto the feed is fine for debugging
+and poor for anything else — it sits over the hands you are trying to watch and
+is unreadable against a bright background.
+
+Still OpenCV rather than tkinter: one window, one render path, nothing to keep
+in sync between a widget tree and a capture loop.
+
+`ViewState` is a plain dataclass holding everything the panel draws, rebuilt
+each frame. That keeps rendering a pure function of state — no drawing logic
+scattered through the capture loop, and the whole panel can be exercised
+headlessly by constructing states and calling `render()`.
+
+Two layout rules that stop it breaking: the output block sizes itself from the
+space actually remaining and clips with a `... +n earlier` marker rather than
+running under the footer, and the help overlay derives its row spacing from the
+window height so it cannot fall off the bottom.
+
+`h` or `?` toggles the help overlay listing every key.
+
 ### `python/src/live.py` — M5 + M6 demo
 Camera → landmarks → rolling buffer → median → SVM → merger → text, in one
 window. `--raw` disables every merger stage so you can *see* the flicker the
