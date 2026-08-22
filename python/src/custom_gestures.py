@@ -143,6 +143,52 @@ class GestureStore:
         self.gestures[name].phrase = phrase
         return True
 
+    def export_to(self, path: Path) -> int:
+        """Write the whole vocabulary to a shareable JSON file."""
+        payload = {
+            "schema_version": SCHEMA_VERSION,
+            "feature_dim": FEATURE_DIM,
+            "exported_at": time.strftime("%Y-%m-%dT%H:%M:%S"),
+            "gestures": {
+                name: {
+                    "samples": gesture.samples.tolist(),
+                    "phrase": gesture.phrase,
+                    "created_at": gesture.created_at,
+                    "note": gesture.note,
+                }
+                for name, gesture in self.gestures.items()
+            },
+        }
+        path.parent.mkdir(parents=True, exist_ok=True)
+        path.write_text(json.dumps(payload, indent=2), encoding="utf-8")
+        return len(self.gestures)
+
+    def import_from(self, path: Path, overwrite: bool = False,
+                    prefix: str = "") -> Tuple[List[str], List[str]]:
+        """Merge a gesture file in. Returns (added, skipped).
+
+        Name collisions are reported rather than silently resolved: quietly
+        overwriting someone's gesture, or quietly discarding the imported one,
+        are both worse than saying which happened.
+        """
+        payload = json.loads(path.read_text(encoding="utf-8"))
+        problems = validate_payload(payload)
+        if problems:
+            raise ImportError_("; ".join(problems))
+
+        added, skipped = [], []
+        for name, entry in payload["gestures"].items():
+            target = f"{prefix}{name}"
+            if target in self.gestures and not overwrite:
+                skipped.append(target)
+                continue
+            self.add(target,
+                     np.asarray(entry["samples"], dtype=np.float32),
+                     phrase=entry.get("phrase", ""),
+                     note=entry.get("note", ""))
+            added.append(target)
+        return added, skipped
+
     def rename(self, old: str, new: str) -> bool:
         if old not in self.gestures or new in self.gestures:
             return False
@@ -351,6 +397,48 @@ class KNNClassifier:
         )
         return (f"KNN: {len(self.thresholds)} gestures, {len(self.X)} samples, "
                 f"k={self.k}\n  {detail}")
+
+
+class ImportError_(Exception):
+    """Raised when an imported gesture file is not usable."""
+
+
+def validate_payload(payload: dict) -> List[str]:
+    """Check an imported file. Returns a list of problems; empty means fine.
+
+    Validated rather than trusted: these files are meant to be shared between
+    people and between the desktop and browser builds, so a malformed or
+    mismatched one should say what is wrong rather than crash later inside a
+    distance calculation.
+    """
+    problems: List[str] = []
+    if not isinstance(payload, dict):
+        return ["file is not a JSON object"]
+
+    dim = payload.get("feature_dim")
+    if dim is not None and dim != FEATURE_DIM:
+        problems.append(f"feature_dim is {dim}, this build uses {FEATURE_DIM}")
+
+    gestures = payload.get("gestures")
+    if not isinstance(gestures, dict) or not gestures:
+        problems.append("no gestures found")
+        return problems
+
+    for name, entry in gestures.items():
+        if not isinstance(entry, dict) or "samples" not in entry:
+            problems.append(f"{name!r}: missing samples")
+            continue
+        try:
+            samples = np.asarray(entry["samples"], dtype=np.float32)
+        except (ValueError, TypeError):
+            problems.append(f"{name!r}: samples are not numeric")
+            continue
+        if samples.ndim != 2 or samples.shape[1] != FEATURE_DIM:
+            problems.append(f"{name!r}: expected (n, {FEATURE_DIM}), "
+                            f"got {tuple(samples.shape)}")
+        elif len(samples) < 2:
+            problems.append(f"{name!r}: only {len(samples)} sample(s)")
+    return problems
 
 
 DEFAULT_PHRASES: List[Tuple[str, str]] = [

@@ -22,6 +22,7 @@ from __future__ import annotations
 
 import argparse
 import time
+from pathlib import Path
 from typing import List, Optional
 
 import cv2
@@ -31,13 +32,13 @@ try:
     from .aggregator import RollingBuffer
     from .camera import Camera, FPSMeter
     from .config import CUSTOM_GESTURE_SAMPLES, ensure_dirs
-    from .custom_gestures import GestureStore, KNNClassifier
+    from .custom_gestures import GestureStore, ImportError_, KNNClassifier
     from .landmark_extractor import LandmarkExtractor
 except ImportError:  # running as a plain script
     from aggregator import RollingBuffer
     from camera import Camera, FPSMeter
     from config import CUSTOM_GESTURE_SAMPLES, ensure_dirs
-    from custom_gestures import GestureStore, KNNClassifier
+    from custom_gestures import GestureStore, ImportError_, KNNClassifier
     from landmark_extractor import LandmarkExtractor
 
 GREEN = (80, 220, 100)
@@ -73,6 +74,12 @@ def parse_args() -> argparse.Namespace:
                         help="change a gesture's phrase (use with --phrase)")
     parser.add_argument("--force", action="store_true",
                         help="overwrite an existing gesture without asking")
+    parser.add_argument("--export", metavar="FILE", type=Path,
+                        help="write all gestures to a shareable JSON file")
+    parser.add_argument("--import", metavar="FILE", type=Path, dest="import_",
+                        help="merge gestures from a JSON file")
+    parser.add_argument("--prefix", default="",
+                        help="prefix imported names, to sidestep collisions")
     return parser.parse_args()
 
 
@@ -170,6 +177,28 @@ def main() -> None:
     store = GestureStore.load()
 
     if args.list:
+        print(store.summary())
+        return
+
+    if args.export:
+        count = store.export_to(args.export)
+        print(f"exported {count} gesture(s) to {args.export}")
+        return
+
+    if args.import_:
+        try:
+            added, skipped = store.import_from(args.import_,
+                                               overwrite=args.force,
+                                               prefix=args.prefix)
+        except ImportError_ as exc:
+            raise SystemExit(f"cannot import {args.import_}: {exc}")
+        store.save()
+        print(f"imported {len(added)}: {', '.join(added) or '-'}")
+        if skipped:
+            print(f"skipped {len(skipped)} name collision(s): "
+                  f"{', '.join(skipped)}")
+            print("  use --force to overwrite, or --prefix to rename them")
+        print()
         print(store.summary())
         return
 

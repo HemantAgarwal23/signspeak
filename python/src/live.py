@@ -19,6 +19,8 @@ Keys (the video window must have focus, not the terminal):
     q / ESC   quit             m  switch mode (ASL <-> custom)
     u         undo             c  clear output
     r         reset merger     SPACE  add a space
+    s         speak the sentence aloud
+    a         toggle auto-speak (custom mode)
 """
 from __future__ import annotations
 
@@ -36,6 +38,7 @@ try:
     from .landmark_extractor import LandmarkExtractor
     from .merger import LetterMerger, Stages
     from .predictor import Predictor
+    from .speech import Speaker
 except ImportError:  # running as a plain script
     from aggregator import RollingBuffer
     from camera import Camera, FPSMeter
@@ -44,6 +47,7 @@ except ImportError:  # running as a plain script
     from landmark_extractor import LandmarkExtractor
     from merger import LetterMerger, Stages
     from predictor import Predictor
+    from speech import Speaker
 
 ASL, CUSTOM = "asl", "custom"
 
@@ -67,6 +71,13 @@ def parse_args() -> argparse.Namespace:
                         help="how many candidate letters to display")
     parser.add_argument("--mode", choices=[ASL, CUSTOM], default=ASL,
                         help="which classifier to start in")
+    parser.add_argument("--no-speech", action="store_true",
+                        help="disable text to speech entirely")
+    parser.add_argument("--auto-speak", action="store_true",
+                        help="speak each phrase as it is confirmed "
+                             "(custom mode only - speaking every letter is noise)")
+    parser.add_argument("--voice", default=None,
+                        help="substring of a voice name, e.g. Zira")
     parser.add_argument("--debug", action="store_true",
                         help="in custom mode, show the nearest gesture and its "
                              "distance even when it is rejected")
@@ -121,6 +132,11 @@ def main() -> None:
               '--phrase "OK!"')
         mode = ASL
 
+    speaker = Speaker(voice=args.voice, enabled=not args.no_speech)
+    auto_speak = args.auto_speak
+    if not speaker.available and not args.no_speech:
+        print("speech unavailable (pyttsx3 not installed) - continuing silently")
+
     buffer = RollingBuffer()
     merger = LetterMerger(stages=Stages.none() if args.raw else None)
     fps_meter = FPSMeter()
@@ -153,8 +169,12 @@ def main() -> None:
                     # A custom gesture emits its mapped phrase, not its name,
                     # and phrases need separating where letters do not.
                     gesture = store.gestures.get(committed)
-                    sentence.append(
-                        (gesture.output if gesture else committed) + " ")
+                    phrase = gesture.output if gesture else committed
+                    sentence.append(phrase + " ")
+                    if auto_speak:
+                        # Only custom mode: auto-speaking each letter of a
+                        # word being spelled is unusable noise.
+                        speaker.say(phrase)
 
             state = merger.state
             accepted = confidence >= TAU
@@ -162,6 +182,7 @@ def main() -> None:
                 (f"fps {fps_meter.tick():4.1f}   mode: "
                  + ("ASL letters" if mode == ASL
                     else f"custom ({len(store)} gestures)")
+                 + ("   auto-speak" if auto_speak and speaker.available else "")
                  + ("   MERGER OFF (--raw)" if args.raw else ""),
                  AMBER if args.raw else GREY),
             ]
@@ -231,6 +252,13 @@ def main() -> None:
                 merger.reset()
             elif key == ord(" "):
                 sentence.append(" ")
+            elif key == ord("s"):
+                spoken = "".join(sentence).strip()
+                if spoken:
+                    speaker.say(spoken)
+            elif key == ord("a"):
+                auto_speak = not auto_speak
+                print(f"auto-speak: {'on' if auto_speak else 'off'}")
             elif key == ord("m"):
                 if not knn.ready:
                     print("no custom gestures recorded yet - "

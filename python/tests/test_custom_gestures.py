@@ -153,6 +153,47 @@ reloaded.rename("stop", "halt")
 check("rename moves the gesture", sorted(reloaded.gestures),
       ["halt", "help", "thumbs_up"])
 
+# --- export / import ------------------------------------------------------
+from custom_gestures import ImportError_, validate_payload   # noqa: E402
+import json                                                   # noqa: E402
+
+tmp = Path(tempfile.mkdtemp())
+export_path = tmp / "vocab.json"
+check("export writes every gesture", store.export_to(export_path), 3)
+
+fresh = GestureStore(path=tmp / "fresh.json")
+added, skipped = fresh.import_from(export_path)
+check("import into an empty store adds all", (len(added), len(skipped)), (3, 0))
+check("imported samples are identical",
+      bool(np.allclose(fresh.gestures["stop"].samples,
+                       store.gestures["stop"].samples, atol=1e-6)), True)
+check("imported store classifies",
+      KNNClassifier(fresh).predict(store.gestures["help"].samples[1])[0], "help")
+
+added, skipped = fresh.import_from(export_path)
+check("re-import skips collisions rather than clobbering",
+      (len(added), len(skipped)), (0, 3))
+added, skipped = fresh.import_from(export_path, prefix="alt_")
+check("prefix sidesteps collisions", len(added), 3)
+added, skipped = fresh.import_from(export_path, overwrite=True)
+check("--force overwrites", (len(added), len(skipped)), (3, 0))
+
+bad = tmp / "bad.json"
+bad.write_text(json.dumps({"feature_dim": 63, "gestures": {
+    "x": {"samples": [[0.0] * 63, [0.0] * 63]}}}), encoding="utf-8")
+try:
+    fresh.import_from(bad)
+    check("wrong feature_dim is rejected", "no error", "error")
+except ImportError_ as exc:
+    check("wrong feature_dim is rejected", "feature_dim" in str(exc), True)
+
+check("empty file is rejected", validate_payload({"gestures": {}}) != [], True)
+check("non-numeric samples rejected",
+      validate_payload({"gestures": {"x": {"samples": [["a"] * 126] * 2}}}) != [],
+      True)
+check("a valid payload reports no problems",
+      validate_payload(json.loads(export_path.read_text(encoding="utf-8"))), [])
+
 print()
 print("ALL PASS" if not fails else "FAILURES: " + ", ".join(fails))
 sys.exit(1 if fails else 0)

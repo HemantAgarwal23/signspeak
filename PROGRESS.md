@@ -28,7 +28,9 @@ Virtualenv at `python/.venv`. Not a git repo yet.
 | M13 | ONNX export | not started |
 | M19–M20 | custom gestures + phrases | **DONE early** - user asked for these before the experiments |
 | M21 | confusion warning | **DONE** - warns at record time |
-| M14–M18, M22–M26 | web build, speech, accounts | not started |
+| M22 | speech output | **DONE** - pyttsx3 on a worker thread |
+| M25 | export/import gesture sets | **DONE** - validated JSON |
+| M14–M18, M23–M24, M26 | web build, accounts, mobile | not started |
 | M27 | user testing | not started |
 
 ---
@@ -204,6 +206,19 @@ Directories created: `python/{src,experiments,export,data/raw,data/models}`,
 
 Both were invisible to synthetic-random-hand tests. **The browser port must be
 tested against recorded sequences, not synthetic vectors.**
+
+## Polish pass (2026-08-23)
+
+- `speech.py`: pyttsx3 on a daemon worker thread; `say()` returns in ~0.02 ms so
+  the capture loop never blocks. **Engine is built inside the worker thread** -
+  SAPI5 is COM-based and cross-thread engine use hangs. Degrades to silence if
+  pyttsx3 is absent. Keys in live.py: `s` speak, `a` toggle auto-speak
+  (custom mode only - per-letter speech is noise).
+- Export/import (M25): `--export FILE`, `--import FILE`, `--prefix`, `--force`.
+  Imports validated (feature_dim, shape, numeric, non-empty); collisions
+  reported not silently resolved. ~200 KB per 20 gestures.
+- requirements.txt gained pyttsx3.
+- All 3 test files pass; test_custom_gestures.py now ~35 checks.
 
 ## Verified so far
 

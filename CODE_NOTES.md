@@ -266,6 +266,30 @@ gives 20 near-identical copies of one instant — measured at 0.014 apart agains
 
 `--list`, `--delete`, `--set-phrase`, `--force` manage what you have.
 
+`--export FILE` and `--import FILE` move a whole vocabulary between machines
+(M25). Imports are **validated, not trusted** — wrong `feature_dim`, malformed
+or non-numeric samples are rejected with a reason rather than crashing later
+inside a distance calculation. Name collisions are reported, never silently
+resolved: `--force` overwrites, `--prefix` renames. 20 gestures is about 200 KB
+of JSON.
+
+### `python/src/speech.py` — M22
+Text to speech that never stalls the video. `pyttsx3.runAndWait()` blocks until
+the phrase finishes, so speaking happens on a worker thread fed by a queue and
+`say()` returns in ~0.02 ms.
+
+The engine is created **inside** that thread, not passed into it. On Windows the
+SAPI5 driver is COM-based and its objects are not safe to share across threads;
+an engine built on the main thread and driven from a worker fails in ways that
+look like random hangs.
+
+If `pyttsx3` is missing the Speaker degrades to silence rather than raising —
+speech is a nicety, not a dependency.
+
+In `live.py`: `s` speaks the sentence, `a` toggles auto-speak. Auto-speak is
+custom-mode only, because speaking every letter of a word being spelled is
+unusable noise.
+
 ### `python/src/dataset.py`
 Owns `data/manifest.json`, the `.npy` files under `data/raw/`, and the bulk
 **packs** under `data/packs/`.
