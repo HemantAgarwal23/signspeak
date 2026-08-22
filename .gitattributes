@@ -1,0 +1,9 @@
+# Normalise line endings so the repo is identical on every machine.
+* text=auto eol=lf
+
+# Binary assets must never be touched.
+*.npy binary
+*.joblib binary
+*.onnx binary
+*.task binary
+*.pdf binary
