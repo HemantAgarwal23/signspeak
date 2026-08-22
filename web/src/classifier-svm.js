@@ -18,7 +18,13 @@ import { transform } from "./features.js";
 // Without this ORT requests its .wasm from the site root, the dev server's SPA
 // fallback answers with index.html, and instantiation fails with
 // "expected magic word 00 61 73 6d, found 3c 21 64 6f" - which is "<!do".
-ort.env.wasm.wasmPaths = "ort/";
+//
+// It must be an ABSOLUTE url. ORT loads its glue code with a dynamic import(),
+// and a bare prefix like "ort/" is read as a module specifier rather than a
+// path, giving "Failed to resolve module specifier". Deriving it from
+// document.baseURI also keeps this correct when the app is hosted under a
+// subpath rather than at the domain root.
+ort.env.wasm.wasmPaths = new URL("ort/", document.baseURI).href;
 
 // Single-threaded on purpose. Threaded wasm needs SharedArrayBuffer, which
 // browsers only expose to cross-origin-isolated pages (COOP + COEP headers).
