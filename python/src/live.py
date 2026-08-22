@@ -1,14 +1,24 @@
-"""M5 + M6 - live fingerspelling in one window.
+"""M5 + M6 + custom gestures - the whole system in one window.
 
     python -m src.live
+    python -m src.live --mode custom  # start in custom-gesture mode
     python -m src.live --raw          # no merger, see the flicker it fixes
 
-Camera -> landmarks -> 30-frame rolling buffer -> median -> SVM -> merger -> text.
+Camera -> landmarks -> 30-frame rolling buffer -> median -> classifier ->
+merger -> text.
+
+Two classifiers share that pipeline and the same feature space:
+    ASL mode     pretrained RBF SVM over 24 fingerspelled letters
+    custom mode  KNN over gestures you recorded yourself, each mapped to a
+                 phrase - record them with `python -m src.record_gesture`
+
+Both feed the same merger, so a custom gesture has to be held just as
+deliberately as a letter before it commits.
 
 Keys (the video window must have focus, not the terminal):
-    q / ESC   quit          c  clear sentence
-    u         undo letter   r  reset merger
-    SPACE     add a space
+    q / ESC   quit             m  switch mode (ASL <-> custom)
+    u         undo             c  clear output
+    r         reset merger     SPACE  add a space
 """
 from __future__ import annotations
 
@@ -22,6 +32,7 @@ try:
     from .aggregator import RollingBuffer
     from .camera import Camera, FPSMeter
     from .config import TAU
+    from .custom_gestures import GestureStore, KNNClassifier
     from .landmark_extractor import LandmarkExtractor
     from .merger import LetterMerger, Stages
     from .predictor import Predictor
@@ -29,9 +40,12 @@ except ImportError:  # running as a plain script
     from aggregator import RollingBuffer
     from camera import Camera, FPSMeter
     from config import TAU
+    from custom_gestures import GestureStore, KNNClassifier
     from landmark_extractor import LandmarkExtractor
     from merger import LetterMerger, Stages
     from predictor import Predictor
+
+ASL, CUSTOM = "asl", "custom"
 
 GREEN = (80, 220, 100)
 AMBER = (60, 190, 255)
@@ -51,6 +65,8 @@ def parse_args() -> argparse.Namespace:
                              "per-frame output the merger exists to fix")
     parser.add_argument("--top-k", type=int, default=3,
                         help="how many candidate letters to display")
+    parser.add_argument("--mode", choices=[ASL, CUSTOM], default=ASL,
+                        help="which classifier to start in")
     return parser.parse_args()
 
 
@@ -71,6 +87,17 @@ def draw_progress(frame: np.ndarray, fraction: float, colour) -> None:
                       colour, -1)
 
 
+def classify(mode: str, aggregated: np.ndarray, predictor: Predictor,
+             knn: KNNClassifier, top_k: int) -> tuple:
+    """Returns (label, confidence, candidates) for the active mode."""
+    if mode == ASL:
+        candidates = predictor.top_k(aggregated, top_k)
+        return candidates[0][0], candidates[0][1], candidates[1:]
+
+    label, confidence = knn.predict(aggregated)
+    return label, confidence, []
+
+
 def main() -> None:
     args = parse_args()
 
@@ -79,6 +106,17 @@ def main() -> None:
     if not predictor.has_probabilities:
         print("WARNING: model has no calibrated probabilities; the merger's "
               "tau threshold will not mean what it should.")
+
+    store = GestureStore.load()
+    knn = KNNClassifier(store)
+    print(knn.describe())
+
+    mode = args.mode
+    if mode == CUSTOM and not knn.ready:
+        print("no custom gestures recorded yet - starting in ASL mode.\n"
+              "  record one with: python -m src.record_gesture --name thumbs_up "
+              '--phrase "OK!"')
+        mode = ASL
 
     buffer = RollingBuffer()
     merger = LetterMerger(stages=Stages.none() if args.raw else None)
@@ -101,27 +139,42 @@ def main() -> None:
 
             aggregated = buffer.value()
             if aggregated is not None and vector is not None:
-                candidates = predictor.top_k(aggregated, args.top_k)
-                label, confidence = candidates[0]
+                label, confidence, candidates = classify(
+                    mode, aggregated, predictor, knn, args.top_k)
+
             committed = merger.update(label, confidence)
             if committed:
-                sentence.append(committed)
+                if mode == ASL:
+                    sentence.append(committed)
+                else:
+                    # A custom gesture emits its mapped phrase, not its name,
+                    # and phrases need separating where letters do not.
+                    gesture = store.gestures.get(committed)
+                    sentence.append(
+                        (gesture.output if gesture else committed) + " ")
 
             state = merger.state
             accepted = confidence >= TAU
             lines = [
-                (f"fps {fps_meter.tick():4.1f}"
+                (f"fps {fps_meter.tick():4.1f}   mode: "
+                 + ("ASL letters" if mode == ASL
+                    else f"custom ({len(store)} gestures)")
                  + ("   MERGER OFF (--raw)" if args.raw else ""),
                  AMBER if args.raw else GREY),
             ]
             if not buffer.ready:
                 lines.append((f"filling buffer {buffer.fill:.0%}", AMBER))
             elif label is None:
-                lines.append(("no hand", GREY))
+                lines.append(("no hand" if vector is None else "no match", GREY))
             else:
-                lines.append((f"{label}  {confidence:.2f}",
+                shown = label
+                if mode == CUSTOM:
+                    gesture = store.gestures.get(label)
+                    if gesture and gesture.phrase:
+                        shown = f"{label} -> {gesture.phrase}"
+                lines.append((f"{shown}  {confidence:.2f}",
                               GREEN if accepted else RED))
-                others = "   ".join(f"{l} {c:.2f}" for l, c in candidates[1:])
+                others = "   ".join(f"{l} {c:.2f}" for l, c in candidates)
                 if others:
                     lines.append((others, GREY))
 
@@ -154,6 +207,16 @@ def main() -> None:
                 merger.reset()
             elif key == ord(" "):
                 sentence.append(" ")
+            elif key == ord("m"):
+                if not knn.ready:
+                    print("no custom gestures recorded yet - "
+                          "python -m src.record_gesture --name <name>")
+                else:
+                    mode = CUSTOM if mode == ASL else ASL
+                    # Both classifiers share the merger, so its accumulated
+                    # candidate belongs to the old mode and must go.
+                    merger.reset()
+                    print(f"mode: {mode}")
 
     print("\nfinal:", "".join(sentence))
 

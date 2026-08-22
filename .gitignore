@@ -12,6 +12,7 @@ python/data/packs/
 python/data/models/
 python/data/downloads/
 python/data/manifest.json
+python/data/custom/
 
 # Scanned source plan (2.3MB of images, no extractable text)
 sign language plan.pdf

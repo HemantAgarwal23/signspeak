@@ -1,0 +1,102 @@
+"""Custom-gesture KNN tests. Pure logic - no webcam needed.
+
+    cd python && .venv/Scripts/python.exe tests/test_custom_gestures.py
+"""
+import sys
+import tempfile
+from pathlib import Path
+
+import numpy as np
+
+sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "src"))
+from custom_gestures import GestureStore, KNNClassifier   # noqa: E402
+
+RNG = np.random.default_rng(7)
+fails = []
+
+
+def check(name, got, want):
+    ok = got == want
+    print(f"{'PASS' if ok else 'FAIL'}  {name:<52} got {got!r}")
+    if not ok:
+        fails.append(name)
+
+
+def fake_hand(seed, jitter=0.01, n=20):
+    """A plausible right-hand gesture: 21 landmarks, slot 1, small jitter."""
+    base = RNG.random((21, 3)).astype(np.float32)
+    out = np.zeros((n, 126), np.float32)
+    for i in range(n):
+        block = base + RNG.normal(0, jitter, base.shape).astype(np.float32)
+        out[i, 63:] = block.reshape(-1)
+    return out
+
+
+store = GestureStore(path=Path(tempfile.mkdtemp()) / "gestures.json")
+store.add("thumbs_up", fake_hand(1), phrase="OK!")
+store.add("stop", fake_hand(2), phrase="Please stop")
+store.add("help", fake_hand(3), phrase="I need help")
+
+knn = KNNClassifier(store)
+check("three gestures stored", len(store), 3)
+check("phrase mapping used for output", store.gestures["thumbs_up"].output, "OK!")
+check("name used when no phrase set",
+      store.add("bare", fake_hand(9)).output, "bare")
+store.remove("bare")
+knn.fit(store)
+
+# recognises each of its own gestures
+correct = 0
+for name in ("thumbs_up", "stop", "help"):
+    sample = store.gestures[name].samples[0]
+    label, conf = knn.predict(sample)
+    correct += label == name
+check("recognises all 3 stored gestures", correct, 3)
+
+# a held-out-ish variation still matches
+label, conf = knn.predict(store.gestures["stop"].samples[-1])
+check("matches a different sample of the same gesture", label, "stop")
+check("confidence is a real number in (0, 1]", 0 < conf <= 1.0, True)
+
+# an unrelated hand must be rejected, not forced into a class
+far = np.zeros((1, 126), np.float32)
+far[0, 63:] = (RNG.random((21, 3)) * 8 + 20).reshape(-1)
+label, conf = knn.predict(far[0])
+check("unrelated pose is rejected (no match)", (label, conf), (None, 0.0))
+
+# empty store answers nothing rather than crashing
+empty = KNNClassifier(GestureStore(path=Path(tempfile.mkdtemp()) / "g.json"))
+check("empty store is not ready", empty.ready, False)
+check("empty store predicts None", empty.predict(far[0]), (None, 0.0))
+
+# confusion warning fires for a near-duplicate, not for a distinct gesture
+dupe = store.gestures["thumbs_up"].samples + RNG.normal(0, 0.002, (20, 126))
+near, d_near = knn.nearest_gesture(dupe.astype(np.float32))
+far_g, d_far = knn.nearest_gesture(fake_hand(42))
+check("near-duplicate identifies the gesture it clones", near, "thumbs_up")
+check("near-duplicate is closer than a distinct gesture", d_near < d_far, True)
+
+# training is genuinely fast - the few-shot claim
+seconds = knn.fit(store)
+check("KNN rebuild well under 2s", seconds < 2.0, True)
+print(f"      (rebuilt 60 samples in {seconds * 1000:.1f} ms)")
+
+# round-trip through disk
+store.save()
+reloaded = GestureStore.load(store.path)
+check("survives save/load", sorted(reloaded.gestures), ["help", "stop", "thumbs_up"])
+check("samples survive round-trip",
+      bool(np.allclose(reloaded.gestures["stop"].samples,
+                       store.gestures["stop"].samples, atol=1e-6)), True)
+check("phrases survive round-trip", reloaded.gestures["thumbs_up"].phrase, "OK!")
+label, _ = KNNClassifier(reloaded).predict(store.gestures["help"].samples[2])
+check("reloaded store still classifies", label, "help")
+
+# rename keeps data intact
+reloaded.rename("stop", "halt")
+check("rename moves the gesture", sorted(reloaded.gestures),
+      ["halt", "help", "thumbs_up"])
+
+print()
+print("ALL PASS" if not fails else "FAILURES: " + ", ".join(fails))
+sys.exit(1 if fails else 0)
