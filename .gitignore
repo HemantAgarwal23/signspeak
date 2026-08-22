@@ -34,3 +34,6 @@ Thumbs.db
 web/dist/
 web/public/wasm/
 web/tests/parity-fixture.json
+
+# onnxruntime wasm runtime, copied from node_modules at setup
+web/public/ort/

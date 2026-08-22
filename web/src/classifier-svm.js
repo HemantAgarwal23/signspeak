@@ -14,6 +14,17 @@ import { FEATURE_DIM, FEATURE_SCALE_NORMALISE, FEATURE_WRIST_RELATIVE,
          MODEL_BASE } from "./config.js";
 import { transform } from "./features.js";
 
+// Serve the runtime from public/ort/ rather than letting the bundler place it.
+// Without this ORT requests its .wasm from the site root, the dev server's SPA
+// fallback answers with index.html, and instantiation fails with
+// "expected magic word 00 61 73 6d, found 3c 21 64 6f" - which is "<!do".
+ort.env.wasm.wasmPaths = "ort/";
+
+// Single-threaded on purpose. Threaded wasm needs SharedArrayBuffer, which
+// browsers only expose to cross-origin-isolated pages (COOP + COEP headers).
+// Requiring those to run a small SVM would break static hosting for no gain.
+ort.env.wasm.numThreads = 1;
+
 export class SvmClassifier {
   constructor() {
     this.session = null;
