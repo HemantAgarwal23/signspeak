@@ -3,7 +3,7 @@
 Written for you, the human. Read this before touching code, and after any
 milestone, to understand what each file does and why. Updated as milestones land.
 
-Last updated: after **M1, M2, M4, M5, M6** and the Kaggle import. 14,400 imported samples, model trained, merger tested.
+Last updated: after **M1, M2, M4, M5, M6** plus custom gestures (brought forward from M19/M20). Working end to end.
 
 ---
 
@@ -230,6 +230,42 @@ by the same median. Frames with no hand are not added, matching how
 `data_collector` records — training and inference must aggregate identically or
 the model sees a different kind of input than it learned on.
 
+### `python/src/custom_gestures.py` — brought forward from M19/M20
+Your own gestures, each mapped to a phrase. A KNN (k=3, Euclidean) over samples
+you record — "training" is transforming and storing them, which is why it takes
+under a millisecond and why the few-shot claim holds.
+
+Shares the *same* feature space as the letter SVM, so both classifiers see
+identical input and a gesture recorded today survives a retrain of the letter
+model. It also means custom gestures inherit the same chirality assumption —
+record with the hand you will use.
+
+**The reject rule is the interesting part.** A KNN always returns something, so
+without one an idle hand fires whichever gesture happens to be nearest. Each
+gesture carries its own threshold, taken as the larger of:
+
+- `2.5 ×` its own sample spread, and
+- `0.35 ×` the distance to the nearest *other* gesture.
+
+That second term is not decoration — see §5b for the measurement that forced it.
+Per-gesture rather than global because a two-handed gesture fills twice as many
+non-zero dimensions and so spreads wider; one shared number would loosen the
+one-handed gestures and tighten the two-handed ones simultaneously.
+
+`nearest_info()` reports the nearest gesture, its distance and the limit, which
+is what `live.py --debug` prints. It distinguishes "nothing was close" from
+"something was close but just over the line".
+
+### `python/src/record_gesture.py`
+Countdown, then 20 samples, then a confusion check against existing gestures.
+
+Samples are taken every `--stride` frames (default 6), **not** every frame.
+Consecutive 30-frame windows overlap by 29 frames, so sampling continuously
+gives 20 near-identical copies of one instant — measured at 0.014 apart against
+2.8+ between genuinely different gestures. See §5b.
+
+`--list`, `--delete`, `--set-phrase`, `--force` manage what you have.
+
 ### `python/src/dataset.py`
 Owns `data/manifest.json`, the `.npy` files under `data/raw/`, and the bulk
 **packs** under `data/packs/`.
@@ -382,6 +418,46 @@ signer, and consecutive frames are near-identical, so a random split puts
 near-duplicates of the same moment on both sides. The model can score highly by
 recognising the photo session. The number that means something comes from your
 own recordings, which the model has never seen — that is the next step.
+
+---
+
+## 5b. Two bugs that real use found and synthetic tests did not
+
+Both were in custom gestures, both surfaced by actually waving hands at the
+camera, and both invisible to tests built on random synthetic hands. Worth
+recording because the same class of mistake will recur in the browser port.
+
+**The rolling buffer blended different hand counts.** A two-handed gesture kept
+reporting "no match" while its stored samples classified 20/20 at confidence
+1.00 — which located the fault at inference, not in the recording. The buffer
+holds 30 frames and takes a median; raising a second hand leaves the window full
+of one-handed history, and once past half the window that hand's 63 coordinates
+median to zero. The gesture silently became one-handed:
+
+| one-handed share of the window | distance from its own centre |
+|---|---|
+| 0–15 of 30 | 0.000 |
+| 20+ of 30 | **2.745** (threshold 0.35) |
+
+Fix: the window restarts when the hand count changes, so a median is only ever
+taken over frames of the same shape.
+
+**The reject threshold was ~8× too tight.** Measuring the three real gestures:
+
+| | |
+|---|---|
+| distance between different gestures | 2.8 – 4.2 |
+| spread within one gesture | 0.04 – 0.18 |
+| threshold at the time | 0.35 |
+
+Everything in that gap was rejected. The spread was itself an artefact of
+overlapping sampling windows — it described one frozen moment, not how a gesture
+varies between sessions, and building a threshold on it encoded the artefact.
+Fix: scale the threshold against the distance to the nearest other gesture as
+well, and decorrelate the samples at record time.
+
+The lesson for the browser port: synthetic random hands cannot reproduce
+temporal artefacts. Test with recorded sequences.
 
 ---
 

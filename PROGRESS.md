@@ -26,7 +26,9 @@ Virtualenv at `python/.venv`. Not a git repo yet.
 | M7 | desktop app | not started |
 | M8–M12 | experiments | not started |
 | M13 | ONNX export | not started |
-| M14–M26 | web build | not started |
+| M19–M20 | custom gestures + phrases | **DONE early** - user asked for these before the experiments |
+| M21 | confusion warning | **DONE** - warns at record time |
+| M14–M18, M22–M26 | web build, speech, accounts | not started |
 | M27 | user testing | not started |
 
 ---
@@ -174,6 +176,34 @@ Directories created: `python/{src,experiments,export,data/raw,data/models}`,
   show the flicker (good for the demo video).
 - `tests/test_merger.py`: 13 tests, all pass, no webcam/model needed.
 - Predictor sanity: 8/8 correct on known training samples, confidences ~0.99.
+
+## Custom gestures (2026-08-23, brought forward from M19/M20)
+
+- `custom_gestures.py` (GestureStore + KNNClassifier), `record_gesture.py`,
+  mode toggle in `live.py` (`m` key), `tests/test_custom_gestures.py`,
+  `tests/test_buffer.py`.
+- Storage: `data/custom/gestures.json`, plain JSON so the browser can hold the
+  same structure in IndexedDB and export/import stays a file copy.
+- User recorded 3 gestures: `no` (1 hand), `yes` (1 hand), `thumbs_up`
+  (2 hands). Working end to end as of this entry.
+- KNN rebuild: 0.3-0.5 ms for 60 samples. The <2s few-shot claim is met by a
+  wide margin and is now measurable.
+
+### TWO BUGS FOUND BY REAL USE - do not reintroduce
+
+1. **RollingBuffer blended hand counts.** Median over a window mixing one- and
+   two-handed frames zeroes a hand's 63 coordinates once its absence passes
+   half the window. Distance from centroid went 0.000 -> 2.745 against a 0.35
+   threshold. Fix: window restarts when the hand mask changes (`_mask`).
+2. **Reject threshold ~8x too tight.** Between-gesture distances 2.8-4.2,
+   within-gesture spread 0.04-0.18, threshold 0.35. The spread was an artefact
+   of overlapping sampling windows (consecutive samples 0.014 apart). Fix:
+   threshold = max(2.5 x spread, 0.35 x distance to nearest other gesture);
+   plus `--stride 6` at record time to decorrelate samples. Thresholds moved
+   0.35 -> ~1.0.
+
+Both were invisible to synthetic-random-hand tests. **The browser port must be
+tested against recorded sequences, not synthetic vectors.**
 
 ## Verified so far
 
