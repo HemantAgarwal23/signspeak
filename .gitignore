@@ -1,0 +1,25 @@
+# Python
+__pycache__/
+*.py[cod]
+.venv/
+venv/
+*.egg-info/
+
+# Recorded data and trained models are large and personal - keep them local.
+# Remove these three lines if you decide to version the dataset.
+python/data/raw/
+python/data/models/
+python/data/manifest.json
+
+# Downloadable model assets - re-fetch with `python -m src.download_models`
+web/public/models/*.task
+
+# Node / web
+node_modules/
+web/dist/
+.vite/
+
+# OS / editor
+.DS_Store
+Thumbs.db
+.vscode/

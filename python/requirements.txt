@@ -1,0 +1,16 @@
+# Core pipeline
+mediapipe>=1.0          # Tasks API; legacy mp.solutions is gone in 1.x
+opencv-python>=4.9
+numpy>=1.26,<2.0
+
+# Training and experiments
+scikit-learn>=1.4
+joblib>=1.3
+pandas>=2.1
+matplotlib>=3.8
+seaborn>=0.13
+
+# Model export (M13)
+skl2onnx>=1.16
+onnx>=1.15
+onnxruntime>=1.17
