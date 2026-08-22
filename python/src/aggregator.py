@@ -46,10 +46,31 @@ class RollingBuffer:
     def __init__(self, length: int = SEQUENCE_LENGTH) -> None:
         self.length = length
         self._frames: deque = deque(maxlen=length)
+        self._hand_mask: Optional[tuple] = None
+
+    @staticmethod
+    def _mask(vector: np.ndarray) -> tuple:
+        """Which hand slots this frame filled, e.g. (False, True)."""
+        half = len(vector) // 2
+        return (bool(np.abs(vector[:half]).sum() > 0),
+                bool(np.abs(vector[half:]).sum() > 0))
 
     def push(self, vector: Optional[np.ndarray]) -> None:
-        if vector is not None:
-            self._frames.append(np.asarray(vector, dtype=np.float32))
+        if vector is None:
+            return
+        vector = np.asarray(vector, dtype=np.float32)
+
+        # A window that mixes one-handed and two-handed frames medians into a
+        # vector that never occurred: once over half the frames lack a hand,
+        # that hand's 63 coordinates collapse to zero and a two-handed gesture
+        # silently becomes a one-handed one. Changing hand count starts a fresh
+        # window instead.
+        mask = self._mask(vector)
+        if mask != self._hand_mask:
+            self._frames.clear()
+            self._hand_mask = mask
+
+        self._frames.append(vector)
 
     def value(self) -> Optional[np.ndarray]:
         """Median-aggregated 126-D vector, or None until the buffer fills."""
@@ -65,5 +86,11 @@ class RollingBuffer:
     def fill(self) -> float:
         return len(self._frames) / self.length
 
+    @property
+    def hands(self) -> int:
+        """How many hands the current window holds. 0 when empty."""
+        return sum(self._hand_mask) if self._hand_mask else 0
+
     def clear(self) -> None:
         self._frames.clear()
+        self._hand_mask = None

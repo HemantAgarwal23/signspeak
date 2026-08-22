@@ -127,11 +127,16 @@ def capture(name: str, args: argparse.Namespace) -> Optional[np.ndarray]:
             elif phase == "capture":
                 if buffer.ready and vector is not None:
                     samples.append(buffer.value())
-                lines.append((f"RECORDING {len(samples)}/{args.samples}", GREEN))
+                lines.append((f"RECORDING {len(samples)}/{args.samples}  "
+                              f"[{buffer.hands}h]", GREEN))
                 lines.append(("move it slightly - vary the angle", GREY))
                 progress_bar(frame, len(samples) / args.samples)
                 if not buffer.ready:
-                    lines.append((f"filling buffer {buffer.fill:.0%}", AMBER))
+                    # The window restarts whenever the hand count changes, so a
+                    # flickering second hand shows up here as a stalled fill.
+                    lines.append((f"filling buffer {buffer.fill:.0%}  "
+                                  f"keep {buffer.hands or 'both'} hand(s) steady",
+                                  AMBER))
                 if len(samples) >= args.samples:
                     elapsed = now - (capture_started or now)
                     break

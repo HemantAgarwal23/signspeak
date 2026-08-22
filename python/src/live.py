@@ -163,16 +163,29 @@ def main() -> None:
                  AMBER if args.raw else GREY),
             ]
             if not buffer.ready:
-                lines.append((f"filling buffer {buffer.fill:.0%}", AMBER))
+                lines.append((f"filling buffer {buffer.fill:.0%}  "
+                              f"({buffer.hands} hand"
+                              f"{'s' if buffer.hands != 1 else ''} in window)",
+                              AMBER))
             elif label is None:
-                lines.append(("no hand" if vector is None else "no match", GREY))
+                if vector is None:
+                    lines.append(("no hand", GREY))
+                else:
+                    lines.append((f"no match  [{buffer.hands}h in window]", GREY))
+                    if mode == CUSTOM and knn.ready:
+                        expected = sorted({n: h for n, h in knn.hands.items()}.values())
+                        if buffer.hands not in expected:
+                            lines.append((f"recorded gestures use "
+                                          f"{'/'.join(map(str, sorted(set(expected))))}"
+                                          f" hand(s)", AMBER))
             else:
                 shown = label
                 if mode == CUSTOM:
                     gesture = store.gestures.get(label)
                     if gesture and gesture.phrase:
                         shown = f"{label} -> {gesture.phrase}"
-                lines.append((f"{shown}  {confidence:.2f}",
+                lines.append((f"{shown}  {confidence:.2f}"
+                              + (f"   [{buffer.hands}h]" if mode == CUSTOM else ""),
                               GREEN if accepted else RED))
                 others = "   ".join(f"{l} {c:.2f}" for l, c in candidates)
                 if others:
