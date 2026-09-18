@@ -8,8 +8,14 @@ without re-reading the codebase. Update at the end of every milestone.
 
 **Environment (verified 2026-08-22):** Python 3.12.10, Node v22.20.0, npm 10.9.3,
 git 2.51.0, Windows 11. Installed in venv: mediapipe 1.0.1, opencv 4.11.0.86,
-numpy 1.26.4, scikit-learn 1.9.0, onnxruntime 1.29.0, skl2onnx 1.20.0. Repo root: `c:\Users\hpi7c\OneDrive\Desktop\sign language`.
-Virtualenv at `python/.venv`. Not a git repo yet.
+numpy 1.26.4, scikit-learn 1.9.0, onnxruntime 1.29.0, skl2onnx 1.20.0.
+
+**Repo root: `C:\projects\signspeak`.** Moved out of OneDrive on 2026-09-18
+by `C:\projects\move-signspeak.ps1` (was `...\OneDrive\Desktop\sign language`).
+The venv was rebuilt there because venvs cannot be relocated; Claude memory was
+copied to the new project key. GitHub: HemantAgarwal23/signspeak.
+Virtualenv at `python/.venv`. Kaggle downloads stay at `~/gesture-data` (outside
+the repo, unaffected by the move).
 
 ---
 
