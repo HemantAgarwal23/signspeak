@@ -1,0 +1,12 @@
+{
+  "baseline_within_subject": 0.968287037037037,
+  "mean_held_out": 0.8405797101449275,
+  "subjects": [
+    {
+      "subject": "s01",
+      "n": 276,
+      "letters": 23,
+      "accuracy": 0.8405797101449275
+    }
+  ]
+}

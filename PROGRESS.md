@@ -25,15 +25,16 @@ the repo, unaffected by the move).
 |---|---|---|
 | M1 | config + landmark extraction + preview | **DONE** - user confirmed skeleton + correct handedness on webcam 2026-08-22 |
 | M2 | recording tool | **DONE** - user recorded 5 TEST samples successfully 2026-08-22 |
-| M3 | dataset — hybrid | **public half DONE** (14,400 imported); user's ~12/letter still to record |
+| M3 | dataset — hybrid | **DONE except Q** - 14,400 public + s01 12/letter x23 (2026-09-20) |
 | M4 | aggregator + trainer | **DONE** - trained on public data, 99.79% val (meaningless, see below) |
 | M5 | live predictor | **DONE** - predictor.py + live.py, verified 8/8 on known samples |
 | M6 | letter merger | **DONE** - 13/13 tests pass in tests/test_merger.py |
 | M7 | desktop app | **DONE** - ui.py dashboard + help overlay |
 | M8 | sample efficiency | **DONE** - headline result, figures in docs/results/ |
 | M12 | confusion matrix | **DONE** - 96.8% temporal, worst pair N->M 12.2% |
-| M9–M11 | cross-subject, calibration, merger ablation | not started (M9/M10 need user's A-Z; M11 needs ~10min of spelling) |
-| M13 | ONNX export | not started |
+| M9 | cross-subject | **DONE for s01** - 84.1% vs 96.8% within; volunteers s02/s03 still needed |
+| M10 | calibration | **DONE for s01** - 83.9% -> 96.3% with 5/letter |
+| M11 | merger ablation | not started - needs ~10 min of recorded spelling |
 | M19–M20 | custom gestures + phrases | **DONE early** - user asked for these before the experiments |
 | M21 | confusion warning | **DONE** - warns at record time |
 | M22 | speech output | **DONE** - pyttsx3 on a worker thread |
@@ -312,6 +313,27 @@ and `representation_ablation.png`.
    is 13 MB (3.5 MB gzipped).
 5. `web/public/{ort,wasm}/` are gitignored and restored by
    `scripts/copy-assets.mjs` on postinstall - a fresh clone breaks without it.
+
+## M9 + M10 on s01 (2026-09-20)
+
+User recorded s01: 12/letter for 23 letters. **Q missing** (could not form it).
+`experiments/cross_subject.py` + `experiments/calibration.py` ->
+`docs/results/cross_subject*.{csv,json,png}`, `calibration.{csv,json,png}`.
+
+- Cross-subject (train everyone else, test subject; = public->s01 today):
+  **84.1%** vs 96.8% within-subject temporal. Total failures V->W 0/12,
+  X->D 0/12, O->C 1/12; T 67% (->M), S 75% (->X). M 100% despite user
+  finding it hard. 16 letters at 100%.
+- Calibration: first N per letter (capture order) -> personal KNN
+  (custom_gestures.KNNClassifier, reused so M24 can use classifier-knn.js);
+  vote = agree wins, else higher confidence, KNN abstain -> SVM. SVM trained
+  probability=True (as shipped). Test = samples after the 5th, fixed across N.
+  N=1 83.9%, N=3 92.5%, N=5 **96.3%** (KNN alone 95.7%).
+- Scratch preview that retrained the SVM with personal samples x20 hit 100%;
+  not used - spec's method is SVM+KNN voting and M24 must match it.
+- Caveat: calibration and test from same session -> upper bound.
+- `docs/asl_reference_sheet.png`: one Kaggle photo per letter, mirrored to
+  match the webcam preview. Made because the user did not know the shapes.
 
 ## Open questions for next session
 - **Has the user checked real letters in the browser vs desktop?** Not yet as of

@@ -99,11 +99,39 @@ M and N are separately hard **twice**: they also had the worst landmark
 stops MediaPipe seeing a hand at all. Detection failure and classification
 failure are different problems that happen to land on the same letters.
 
+### An unseen signer, and five samples to fix it
+
+Everything above trains and tests on one signer. Tested on a new person
+(`s01`, 12 samples for each of 23 letters, recorded on a laptop webcam), the model trained only on
+the public data scores **84.1%**, against 96.8% within-subject.
+
+![Cross-subject](docs/results/cross_subject.png)
+
+The loss is not spread evenly. Sixteen letters stay at 100%. V is read as
+W and X as D on every sample, and O is read as C on 11 of 12. Those letters are formed
+differently by the two signers rather than being hard in general.
+
+Five of the new user's own samples per letter, held in the same KNN that powers
+custom gestures and combined with the SVM by confidence-weighted voting, lift
+accuracy on their remaining samples from **83.9% to 96.3%**.
+
+![Calibration](docs/results/calibration.png)
+
+| personal samples / letter | KNN alone | SVM + KNN |
+|---:|---:|---:|
+| 0 | — | 83.9% |
+| 1 | 77.6% | 83.9% |
+| 3 | 90.1% | 92.5% |
+| 5 | 95.7% | 96.3% |
+
+Calibration and test samples come from the same session, so the calibrated
+figure is an upper bound. One unseen signer is a data point, not a population.
+
 ### Honest limitations
 
-- **Training data is a single signer.** Every number above is within-signer.
-  Cross-subject evaluation and personal calibration are implemented in the plan
-  but not yet measured — see [Roadmap](#roadmap).
+- **One unseen signer so far.** The cross-subject number is from a single
+  person; leave-one-subject-out over more volunteers is wired up and runs as
+  soon as they record.
 - **Absolute accuracy is not the headline.** The sample-efficiency curve and the
   representation ablation are, because they hold regardless of dataset size.
 
@@ -187,6 +215,8 @@ desktop imports into the browser unchanged.
 cd python
 .venv/Scripts/python.exe -m experiments.sample_efficiency --representations
 .venv/Scripts/python.exe -m experiments.confusion_matrix
+.venv/Scripts/python.exe -m experiments.cross_subject
+.venv/Scripts/python.exe -m experiments.calibration
 ```
 
 ### Tests
@@ -251,7 +281,7 @@ docs/results/   figures and tables
 | Desktop UI, speech, export/import, custom gestures | done |
 | Sample efficiency, confusion matrix | done |
 | Browser build with verified Python parity | done |
-| Cross-subject evaluation, personal calibration | needs multi-signer recordings |
+| Cross-subject evaluation, personal calibration | done for 1 signer; needs 2–3 volunteers |
 | Merger ablation (character error rate per stage) | pending |
 | Accounts and sync, mobile polish, user testing | planned |
 
