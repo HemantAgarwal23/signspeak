@@ -212,6 +212,21 @@ button {
 
 .panel-foot { margin-top: auto; padding-top: 8px; border-top: 1px solid var(--panel-2); }
 
+/* ---------------------------------------------------------- calibration */
+button:disabled { opacity: 0.45; cursor: default; }
+.calib-run { margin-top: 10px; display: flex; flex-direction: column; gap: 10px; }
+.calib-letter { display: flex; gap: 14px; align-items: center; }
+.calib-ref {
+  width: 104px;
+  height: 104px;
+  flex: none;
+  border-radius: 8px;
+  background-color: var(--panel-2);
+  background-repeat: no-repeat;
+  /* The sheet is a 7 x 4 grid of tiles; main.js sets the position. */
+  background-size: 700% 400%;
+}
+
 /* ------------------------------------------------------------- recorder */
 .recorder {
   position: fixed;

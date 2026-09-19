@@ -36,4 +36,12 @@ export const IDLE_FRAMES_TO_FORGET = 15;
 export const CUSTOM_GESTURE_SAMPLES = 20;
 export const KNN_K = 3;
 
+// Personal calibration (M24). CALIBRATION_SAMPLES mirrors python/src/config.py
+// and is the count validated in experiments/calibration.py. The held-out
+// samples are not used for prediction, only for the before/after readout.
+export const CALIBRATION_SAMPLES = 5;
+export const CALIBRATION_HELD_OUT = 2;
+export const CALIBRATION_STRIDE = 8;       // frames between samples
+export const CALIBRATION_COUNTDOWN = 3;    // seconds to form each letter
+
 export const MODEL_BASE = "models";

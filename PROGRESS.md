@@ -40,7 +40,8 @@ the repo, unaffected by the move).
 | M22 | speech output | **DONE** - pyttsx3 on a worker thread |
 | M25 | export/import gesture sets | **DONE** - validated JSON |
 | M13–M18 | browser build | **DONE** - parity verified, working in browser |
-| M23–M24, M26 | accounts, browser calibration, mobile | not started (M24 waits on M10) |
+| M24 | browser calibration | **DONE** 2026-09-20 - see below |
+| M23, M26 | accounts, mobile | not started |
 | M27 | user testing | not started |
 
 ---
@@ -334,6 +335,26 @@ User recorded s01: 12/letter for 23 letters. **Q missing** (could not form it).
 - Caveat: calibration and test from same session -> upper bound.
 - `docs/asl_reference_sheet.png`: one Kaggle photo per letter, mirrored to
   match the webcam preview. Made because the user did not know the shapes.
+
+## M24 browser calibration (2026-09-20)
+
+- `web/src/calibration.js`: `vote()` (identical rule to
+  experiments/calibration.py), `CalibrationSession` (countdown 3s, then 5 cal +
+  2 held-out samples per letter, stride 8 frames, time injected),
+  `evaluate()` before/after on held-out, load/save/clear.
+- Stored under its own localStorage key via `GestureStore(gestures, key)` -
+  key param added so calibration never mixes with custom gestures.
+- UI: Calibration section in ASL mode (hidden in custom). Shows the reference
+  tile per letter from `public/reference/asl_sheet.jpg` (68 KB, 7x4 grid,
+  cropped by background-position). Live prediction hidden while calibrating so
+  the user does not bend shapes towards the model's guess. "Use my
+  calibration" toggle.
+- Verified: 10 new core tests; **s01 replayed through the JS code + shipped
+  ONNX: 85.7% -> 98.1%** (Python 83.9 -> 96.3; shipped model trained on a
+  different split). Playwright: flow, skip, cancel, mode switch, no errors.
+- NOT verified: a real person calibrating live in the browser.
+- Reference photos are Kaggle grassknoted/asl-alphabet - check its licence
+  before public hosting.
 
 ## Open questions for next session
 - **Has the user checked real letters in the browser vs desktop?** Not yet as of

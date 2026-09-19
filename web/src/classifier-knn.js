@@ -29,12 +29,17 @@ function distance(a, b) {
 }
 
 export class GestureStore {
-  constructor(gestures = {}) { this.gestures = gestures; }
+  // `key` lets the calibration samples reuse this class without mixing into
+  // the user's custom gestures.
+  constructor(gestures = {}, key = STORAGE_KEY) {
+    this.gestures = gestures;
+    this.key = key;
+  }
 
-  static load() {
+  static load(key = STORAGE_KEY) {
     try {
-      const raw = localStorage.getItem(STORAGE_KEY);
-      if (!raw) return new GestureStore();
+      const raw = localStorage.getItem(key);
+      if (!raw) return new GestureStore({}, key);
       const payload = JSON.parse(raw);
       const gestures = {};
       for (const [name, entry] of Object.entries(payload.gestures ?? {})) {
@@ -44,15 +49,15 @@ export class GestureStore {
           createdAt: entry.created_at ?? entry.createdAt ?? "",
         };
       }
-      return new GestureStore(gestures);
+      return new GestureStore(gestures, key);
     } catch {
       // A corrupt store must not stop the app loading; the letters still work.
-      return new GestureStore();
+      return new GestureStore({}, key);
     }
   }
 
   save() {
-    localStorage.setItem(STORAGE_KEY, JSON.stringify(this.toJSON()));
+    localStorage.setItem(this.key, JSON.stringify(this.toJSON()));
   }
 
   toJSON() {

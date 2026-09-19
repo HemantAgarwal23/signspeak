@@ -70,6 +70,35 @@
           </label>
         </div>
 
+        <div id="asl-panel" class="calib">
+          <div class="row">
+            <span class="label">Calibration</span>
+            <div class="row-actions">
+              <button id="calibrate" class="primary small-btn">Calibrate</button>
+              <button id="calib-reset" class="ghost hidden">Reset</button>
+            </div>
+          </div>
+          <p id="calib-summary" class="muted small"></p>
+          <label id="calib-use-row" class="toggle hidden">
+            <input type="checkbox" id="calib-use" checked />
+            <span>Use my calibration</span>
+          </label>
+          <div id="calib-run" class="calib-run hidden">
+            <div class="calib-letter">
+              <div id="calib-ref" class="calib-ref" role="img"></div>
+              <div>
+                <div id="calib-target" class="prediction">&mdash;</div>
+                <div id="calib-step" class="muted small"></div>
+              </div>
+            </div>
+            <div class="meter"><div id="calib-bar" class="meter-fill"></div></div>
+            <div class="row-actions">
+              <button id="calib-skip" class="ghost">Skip letter</button>
+              <button id="calib-cancel" class="ghost danger">Cancel</button>
+            </div>
+          </div>
+        </div>
+
         <div id="custom-panel" class="custom hidden">
           <div class="row">
             <span class="label">Your gestures</span>

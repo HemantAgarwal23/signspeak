@@ -8,7 +8,9 @@
 import { RollingBuffer } from "../src/buffer.js";
 import { LetterMerger, NO_STAGES } from "../src/merger.js";
 import { toScaleNormalised, toWristRelative, transform } from "../src/features.js";
-import { FEATURE_DIM } from "../src/config.js";
+import { CALIBRATION_COUNTDOWN, CALIBRATION_HELD_OUT, CALIBRATION_SAMPLES,
+         CALIBRATION_STRIDE, FEATURE_DIM } from "../src/config.js";
+import { CalibrationSession, vote } from "../src/calibration.js";
 
 let failures = 0;
 
@@ -154,6 +156,41 @@ for (let i = 0; i < 20; i++) {
   previous = p;
 }
 check("progress monotone and <= 1", monotone, true);
+
+// ------------------------------------------------------------- calibration
+// vote() must match vote() in python/experiments/calibration.py.
+const svmSays = (label, confidence) => ({ label, confidence });
+check("vote: abstaining KNN defers to SVM",
+      vote(svmSays("A", 0.4), { label: null, confidence: 0 }).label, "A");
+check("vote: agreement keeps the label",
+      vote(svmSays("A", 0.4), { label: "A", confidence: 0.9 }).label, "A");
+check("vote: agreement reports the higher confidence",
+      vote(svmSays("A", 0.4), { label: "A", confidence: 0.9 }).confidence, 0.9);
+check("vote: more confident KNN overrides",
+      vote(svmSays("W", 0.5), { label: "V", confidence: 0.8 }).label, "V");
+check("vote: more confident SVM holds",
+      vote(svmSays("W", 0.9), { label: "V", confidence: 0.6 }).label, "W");
+
+const perLetter = CALIBRATION_SAMPLES + CALIBRATION_HELD_OUT;
+const hand = new Float32Array(FEATURE_DIM).fill(0.5);
+const session = new CalibrationSession(["A", "B"]);
+let clock = 0;
+session.update(hand, clock);
+check("calibration: nothing captured during countdown",
+      session.samples.length, 0);
+clock = CALIBRATION_COUNTDOWN * 1000 + 1;
+let frames = 0;
+while (session.index === 0 && frames < 1000) { session.update(hand, clock); frames += 1; }
+check("calibration: samples spaced by the stride",
+      frames, 1 + (perLetter - 1) * CALIBRATION_STRIDE);
+check("calibration: split into calibration and held-out",
+      [session.calibration.A.length, session.heldOut.A.length],
+      [CALIBRATION_SAMPLES, CALIBRATION_HELD_OUT]);
+session.update(null, clock + 10);
+check("calibration: no hand captures nothing", session.samples.length, 0);
+session.skip(clock);
+check("calibration: skip records the letter and finishes",
+      [session.skipped, session.done, session.progress], [["B"], true, 1]);
 
 console.log();
 console.log(failures ? `${failures} FAILURE(S)` : "ALL PASS");
