@@ -356,6 +356,18 @@ User recorded s01: 12/letter for 23 letters. **Q missing** (could not form it).
 - Reference photos are Kaggle grassknoted/asl-alphabet - check its licence
   before public hosting.
 
+## Hosting prep (2026-09-20)
+
+- Fresh-clone build was MISSING `hand_landmarker.task` (gitignored) - any
+  host building from git would ship a page that cannot detect hands.
+  `web/scripts/copy-assets.mjs` (postinstall) now downloads it from the
+  config.py URL and checks sha256 `fbc2a300...cde1`.
+- Verified: fresh clone -> npm ci -> build -> vite preview -> test-boot ALL PASS.
+- dist is ~68 MB (MediaPipe wasm 34 MB, ort 13.5 MB in public/ort PLUS a
+  13.5 MB duplicate Vite bundles into assets/, unused). Not fixed yet.
+- Playwright has no install scripts, so it adds no browser download to deploys.
+- Vercel: Root Directory `web`, Vite preset. User deploys from his account.
+
 ## Open questions for next session
 - **Has the user checked real letters in the browser vs desktop?** Not yet as of
   2026-08-23. Parity tests pass on synthetic vectors only.
